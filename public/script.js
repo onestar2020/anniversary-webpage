@@ -152,6 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const volumeSlider = document.getElementById('volumeSlider');
   let userWantsMusic = true;
   let pausedForMedia = false;
+  let autoMuted = false;
   let playlist = [];
   let songIndex = 0;
 
@@ -203,7 +204,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function setMusicLabel() {
-    musicText.textContent = bgMusic.paused ? 'Play Our Song' : 'Pause Music';
+    musicText.textContent = !bgMusic.paused && autoMuted
+      ? 'Tap para may tunog'
+      : (bgMusic.paused ? 'Play Our Song' : 'Pause Music');
   }
 
   function updateMusicUI() {
@@ -242,6 +245,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   musicBtn.addEventListener('click', () => {
     wakeAudioCtx();
+    if (autoMuted) {
+      autoMuted = false;
+      bgMusic.muted = false;
+      setMusicLabel();
+      return;
+    }
     if (bgMusic.paused) {
       userWantsMusic = true;
       pausedForMedia = false;
@@ -267,10 +276,17 @@ document.addEventListener('DOMContentLoaded', () => {
   function armAutoplayFallback() {
     // Binabaran ng browser ang autoplay na may tunog hangga't walang interaction —
     // unang tap/keypress kahit saan ang magbubukas ng kanta.
-    const startMusic = () => {
+    const startMusic = (ev) => {
       document.removeEventListener('pointerdown', startMusic);
       document.removeEventListener('keydown', startMusic);
+      // Ang musicBtn click mismo ang mag-unmute (tingnan ang musicBtn handler)
+      if (ev && ev.target && ev.target.closest && ev.target.closest('#musicBtn')) return;
       wakeAudioCtx();
+      if (autoMuted) {
+        autoMuted = false;
+        bgMusic.muted = false;
+        setMusicLabel();
+      }
       if (userWantsMusic && !pausedForMedia && bgMusic.paused) bgMusic.play().then(setMusicLabel).catch(() => {});
     };
     document.addEventListener('pointerdown', startMusic);
@@ -283,7 +299,13 @@ document.addEventListener('DOMContentLoaded', () => {
     wakeAudioCtx();
     bgMusic.src = '/api/bg-music/stream?v=' + encodeURIComponent(cur.id);
     bgMusic.load();
-    bgMusic.play().then(setMusicLabel).catch(armAutoplayFallback);
+    bgMusic.play().then(setMusicLabel).catch(() => {
+      // Hinadlangan ng browser ang tunog sa first visit — naka-mute muna ang
+      // tugtog (palaging pinapayagan ito ng browser), tapos unang tap = may tunog agad.
+      bgMusic.muted = true;
+      autoMuted = true;
+      bgMusic.play().then(setMusicLabel).catch(() => {});
+    });
     armAutoplayFallback();
     updateMusicUI();
   }
@@ -296,6 +318,8 @@ document.addEventListener('DOMContentLoaded', () => {
     songIndex = 0;
     pausedForMedia = false;
     userWantsMusic = true;
+    autoMuted = false;
+    bgMusic.muted = false;
     updateMusicUI();
   }
 
