@@ -1,5 +1,5 @@
 const SESSION_TTL = 7 * 24 * 60 * 60; // 7 days (seconds)
-const MAX_FILE_MB = 30; // Apps Script text/plain POST limit is ~50MB; base64 inflates by 4/3, keep margin
+const MAX_FILE_MB = 36; // Apps Script text/plain POST limit is ~50MB; base64 inflates by 4/3 (36MB -> ~48MB on the wire)
 
 const EXT_TYPES = {
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif',
