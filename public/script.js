@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function driveAudioSrc(url) {
     const m = url.match(/\/file\/d\/([\w-]+)/) || url.match(/[?&]id=([\w-]+)/);
-    return m ? `https://docs.google.com/uc?export=download&id=${m[1]}` : url;
+    return m ? '/api/drive-audio?id=' + m[1] : url;
   }
 
   function toYouTubeEmbed(url) {
@@ -140,25 +140,79 @@ document.addEventListener('DOMContentLoaded', () => {
   updateLiveCounter();
 
   // ---------- Background Music ----------
+  // Ang kanta ay naka-host sa Google Drive at naka-set ng admin (KV 'bg-music')
+  // dahil hindi pwedeng ilagay ang copyrighted songs sa public repo.
   const bgMusic = document.getElementById('bgMusic');
   const musicBtn = document.getElementById('musicBtn');
   const musicText = document.getElementById('musicText');
-  let isPlaying = false;
+  let userWantsMusic = true;
+  let pausedForMedia = false;
+  let currentSong = null;
 
-  bgMusic.addEventListener('canplaythrough', () => { musicBtn.style.display = ''; }, { once: true });
-  bgMusic.addEventListener('error', () => { musicBtn.style.display = 'none'; }, { once: true });
-  bgMusic.load();
+  bgMusic.volume = 0.35;
+
+  function setMusicLabel() {
+    musicText.textContent = bgMusic.paused ? 'Play Our Song' : 'Pause Music';
+  }
+
+  function pauseMusicForMedia() {
+    if (!bgMusic.paused) {
+      pausedForMedia = true;
+      bgMusic.pause();
+    }
+    setMusicLabel();
+  }
+
+  function resumeMusicAfterMedia() {
+    if (pausedForMedia && userWantsMusic && bgMusic.paused) {
+      bgMusic.play().catch(() => {});
+    }
+    pausedForMedia = false;
+    setMusicLabel();
+  }
 
   musicBtn.addEventListener('click', () => {
-    if (isPlaying) {
-      bgMusic.pause();
-      musicText.textContent = 'Play Our Song';
-    } else {
+    if (bgMusic.paused) {
+      userWantsMusic = true;
+      pausedForMedia = false;
       bgMusic.play().catch(() => {});
-      musicText.textContent = 'Pause Music';
+    } else {
+      userWantsMusic = false;
+      bgMusic.pause();
     }
-    isPlaying = !isPlaying;
+    setMusicLabel();
   });
+
+  function armAutoplayFallback() {
+    // Binabaran ng browser ang autoplay na may tunog hangga't walang interaction —
+    // unang tap/keypress kahit saan ang magbubukas ng kanta.
+    const startMusic = () => {
+      document.removeEventListener('pointerdown', startMusic);
+      document.removeEventListener('keydown', startMusic);
+      if (userWantsMusic && bgMusic.paused) bgMusic.play().then(setMusicLabel).catch(() => {});
+    };
+    document.addEventListener('pointerdown', startMusic);
+    document.addEventListener('keydown', startMusic);
+  }
+
+  function startSong() {
+    if (!currentSong || !currentSong.id) return;
+    bgMusic.src = '/api/bg-music/stream?v=' + encodeURIComponent(currentSong.id);
+    bgMusic.load();
+    bgMusic.play().then(setMusicLabel).catch(armAutoplayFallback);
+    bgMusic.addEventListener('canplay', () => { musicBtn.style.display = ''; }, { once: true });
+    bgMusic.addEventListener('error', () => { musicBtn.style.display = 'none'; }, { once: true });
+  }
+
+  (async function initMusic() {
+    try {
+      const res = await fetch('/api/bg-music');
+      currentSong = await res.json();
+    } catch (e) {
+      currentSong = null;
+    }
+    if (currentSong && currentSong.id) startSong();
+  })();
 
   // ---------- Elements ----------
   const timelineContainer = document.getElementById('timelineContainer');
@@ -206,6 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function setAdmin(admin) {
     isAdmin = admin;
     logoutBtn.style.display = admin ? '' : 'none';
+    musicAdminBtn.style.display = admin ? '' : 'none';
     if (admin) {
       openAdminBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Add New Memory';
     } else {
@@ -227,6 +282,94 @@ document.addEventListener('DOMContentLoaded', () => {
   logoutBtn.addEventListener('click', async () => {
     await fetch('/api/logout', { method: 'POST' });
     setAdmin(false);
+  });
+
+  // ---------- Background Music Admin ----------
+  const musicAdminBtn = document.getElementById('musicAdminBtn');
+  const bgMusicModal = document.getElementById('bgMusicModal');
+  const closeBgMusicBtn = document.getElementById('closeBgMusicBtn');
+  const currentSongLabel = document.getElementById('currentSongLabel');
+  const songFile = document.getElementById('songFile');
+  const songDriveLink = document.getElementById('songDriveLink');
+  const saveSongBtn = document.getElementById('saveSongBtn');
+  const removeSongBtn = document.getElementById('removeSongBtn');
+  const songStatusMsg = document.getElementById('songStatusMsg');
+
+  async function refreshSongLabel() {
+    try {
+      const res = await fetch('/api/bg-music');
+      const info = await res.json();
+      currentSongLabel.textContent = (info && info.id)
+        ? 'Kasalukuyang kanta: ' + (info.name || 'naka-set na')
+        : 'Wala pang naka-set na kanta.';
+    } catch (e) {
+      currentSongLabel.textContent = '';
+    }
+  }
+
+  musicAdminBtn.addEventListener('click', () => {
+    songStatusMsg.textContent = '';
+    refreshSongLabel();
+    showModal(bgMusicModal);
+  });
+
+  closeBgMusicBtn.addEventListener('click', () => hideModal(bgMusicModal));
+
+  saveSongBtn.addEventListener('click', async () => {
+    const f = songFile.files[0];
+    const link = songDriveLink.value.trim();
+    if (!f && !link) {
+      songStatusMsg.style.color = '#ff4b72';
+      songStatusMsg.textContent = 'Pumili ng file o mag-paste ng Drive link.';
+      return;
+    }
+    songStatusMsg.style.color = '#70d6ff';
+    songStatusMsg.textContent = f ? 'Ina-upload ang kanta sa Drive...' : 'Sine-save ang Drive link...';
+    saveSongBtn.disabled = true;
+    const fd = new FormData();
+    if (f) fd.append('song', f); else fd.append('driveLink', link);
+    try {
+      const res = await fetch('/api/bg-music', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Server error occurred.');
+      currentSong = data;
+      userWantsMusic = true;
+      pausedForMedia = false;
+      startSong();
+      songStatusMsg.style.color = '#38ef7d';
+      songStatusMsg.textContent = 'Kanta naka-set na: ' + (data.name || (f ? f.name : 'Drive song'));
+      songFile.value = '';
+      songDriveLink.value = '';
+      refreshSongLabel();
+    } catch (err) {
+      songStatusMsg.style.color = '#ff4b72';
+      songStatusMsg.textContent = err.message;
+    } finally {
+      saveSongBtn.disabled = false;
+    }
+  });
+
+  removeSongBtn.addEventListener('click', async () => {
+    songStatusMsg.style.color = '#70d6ff';
+    songStatusMsg.textContent = 'Bine-bura ang music...';
+    try {
+      const res = await fetch('/api/bg-music', { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Server error occurred.');
+      currentSong = null;
+      bgMusic.pause();
+      bgMusic.removeAttribute('src');
+      bgMusic.load();
+      musicBtn.style.display = 'none';
+      pausedForMedia = false;
+      userWantsMusic = true;
+      songStatusMsg.style.color = '#38ef7d';
+      songStatusMsg.textContent = 'Music naka-off na.';
+      refreshSongLabel();
+    } catch (err) {
+      songStatusMsg.style.color = '#ff4b72';
+      songStatusMsg.textContent = err.message;
+    }
   });
 
   loginForm.addEventListener('submit', async (e) => {
@@ -256,6 +399,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('click', (e) => {
     if (e.target === loginModal) hideModal(loginModal);
     if (e.target === memoryModal) { hideModal(memoryModal); editingId = null; }
+    if (e.target === bgMusicModal) hideModal(bgMusicModal);
     if (e.target === lightboxEl) closeLightbox();
   });
 
@@ -503,6 +647,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderLightboxItem();
     lightboxEl.classList.add('active');
     document.body.style.overflow = 'hidden';
+    if ((memory.media || []).some(m => m.type === 'video' || m.type === 'audio')) pauseMusicForMedia();
   }
 
   function closeLightbox() {
@@ -510,6 +655,7 @@ document.addEventListener('DOMContentLoaded', () => {
     lightboxEl.classList.remove('active');
     lightboxStage.innerHTML = '';
     document.body.style.overflow = '';
+    resumeMusicAfterMedia();
   }
 
   function buildDots() {

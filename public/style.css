@@ -212,6 +212,26 @@ body {
   background: rgba(255, 75, 114, 0.4);
 }
 
+.btn-music-admin {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-sub);
+  border: 1px solid var(--glass-border);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.btn-music-admin:hover {
+  color: #fff;
+  background: rgba(112, 214, 255, 0.35);
+}
+
+#removeSongBtn {
+  margin-left: 10px;
+}
+
 /* Timeline Items */
 .timeline {
   position: relative;

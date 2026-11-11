@@ -35,7 +35,7 @@
     <button class="btn-music" id="musicBtn" style="display:none;">
       <i class="fa-solid fa-music"></i> <span id="musicText">Play Our Song</span>
     </button>
-    <audio id="bgMusic" loop src="/uploads/our-song.mp3"></audio>
+    <audio id="bgMusic" loop preload="auto"></audio>
   </header>
 
   <!-- Main Content Area -->
@@ -43,6 +43,9 @@
     <div class="section-top">
       <h2><i class="fa-solid fa-heart"></i> Our Story &amp; Memories</h2>
       <div class="admin-controls">
+        <button class="btn-music-admin" id="musicAdminBtn" style="display:none;" title="Background Music">
+          <i class="fa-solid fa-music"></i>
+        </button>
         <button class="btn-logout" id="logoutBtn" style="display:none;" title="Logout">
           <i class="fa-solid fa-right-from-bracket"></i>
         </button>
@@ -127,6 +130,27 @@
         <button type="submit" class="btn-submit" id="submitBtn"><i class="fa-solid fa-paper-plane"></i> Save Memory</button>
         <p class="status-msg" id="statusMsg"></p>
       </form>
+    </div>
+  </div>
+
+  <!-- Background Music Modal (admin only) -->
+  <div class="modal" id="bgMusicModal">
+    <div class="modal-content glass-card">
+      <span class="close-btn" id="closeBgMusicBtn">&times;</span>
+      <h3><i class="fa-solid fa-music"></i> Background Music</h3>
+      <p class="modal-note">Ito ang automatic na tumutugtog pagbukas ng webpage. Pumili ng file o i-paste ang Drive link para palitan; Burahin para i-off.</p>
+      <p class="status-msg" id="currentSongLabel"></p>
+      <div class="input-group">
+        <label>Song File <small>(mp3/wav/m4a, hanggang 30MB)</small></label>
+        <input type="file" id="songFile" accept="audio/*">
+      </div>
+      <div class="input-group">
+        <label>O kaya: Drive Link <small>(share link ng mp3 file — "Anyone with the link")</small></label>
+        <input type="text" id="songDriveLink" placeholder="https://drive.google.com/file/d/...">
+      </div>
+      <button type="button" class="btn-submit" id="saveSongBtn"><i class="fa-solid fa-music"></i> I-save ang Kanta</button>
+      <button type="button" class="btn-delete" id="removeSongBtn"><i class="fa-solid fa-trash"></i> Burahin ang Music</button>
+      <p class="status-msg" id="songStatusMsg"></p>
     </div>
   </div>
 
