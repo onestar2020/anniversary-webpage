@@ -31,10 +31,19 @@
       <div class="time-card"><span id="seconds">--</span><label>Seconds</label></div>
     </div>
 
-    <!-- Background Music Toggle -->
-    <button class="btn-music" id="musicBtn" style="display:none;">
-      <i class="fa-solid fa-music"></i> <span id="musicText">Play Our Song</span>
-    </button>
+    <!-- Background Music Controls -->
+    <div class="music-controls">
+      <button class="btn-music-nav" id="prevSongBtn" style="display:none;" title="Previous Song">
+        <i class="fa-solid fa-backward-step"></i>
+      </button>
+      <button class="btn-music" id="musicBtn" style="display:none;">
+        <i class="fa-solid fa-music"></i> <span id="musicText">Play Our Song</span>
+      </button>
+      <button class="btn-music-nav" id="nextSongBtn" style="display:none;" title="Next Song">
+        <i class="fa-solid fa-forward-step"></i>
+      </button>
+    </div>
+    <p class="now-playing" id="nowPlaying" style="display:none;"></p>
     <audio id="bgMusic" loop preload="auto"></audio>
   </header>
 
@@ -138,17 +147,20 @@
     <div class="modal-content glass-card">
       <span class="close-btn" id="closeBgMusicBtn">&times;</span>
       <h3><i class="fa-solid fa-music"></i> Background Music</h3>
-      <p class="modal-note">Ito ang automatic na tumutugtog pagbukas ng webpage. Pumili ng file o i-paste ang Drive link para palitan; Burahin para i-off.</p>
-      <p class="status-msg" id="currentSongLabel"></p>
+      <p class="modal-note">Ito ang automatic na tumutugtog pagbukas ng webpage. Mag-add ng maraming kanta para pwede itong i-Next/Back ng GF mo; Burahin para i-off lahat.</p>
       <div class="input-group">
-        <label>Song File <small>(mp3/wav/m4a, hanggang 30MB)</small></label>
-        <input type="file" id="songFile" accept="audio/*">
+        <label>Mga Kasalukuyang Kanta</label>
+        <div class="existing-media-list" id="playlistList"></div>
       </div>
       <div class="input-group">
-        <label>O kaya: Drive Link <small>(share link ng mp3 file — "Anyone with the link")</small></label>
-        <input type="text" id="songDriveLink" placeholder="https://drive.google.com/file/d/...">
+        <label>Song Files <small>(mp3/wav/m4a, pwedeng sabay-sabay, hanggang 30MB kada file)</small></label>
+        <input type="file" id="songFile" accept="audio/*" multiple>
       </div>
-      <button type="button" class="btn-submit" id="saveSongBtn"><i class="fa-solid fa-music"></i> I-save ang Kanta</button>
+      <div class="input-group">
+        <label>O kaya: mga Drive Links <small>(share link ng mp3 &mdash; "Anyone with the link", isa kada linya)</small></label>
+        <textarea id="songLinks" rows="3" placeholder="https://drive.google.com/file/d/..."></textarea>
+      </div>
+      <button type="button" class="btn-submit" id="saveSongBtn"><i class="fa-solid fa-plus"></i> I-add ang mga Kanta</button>
       <button type="button" class="btn-delete" id="removeSongBtn"><i class="fa-solid fa-trash"></i> Burahin ang Music</button>
       <p class="status-msg" id="songStatusMsg"></p>
     </div>

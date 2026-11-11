@@ -238,70 +238,92 @@ export default {
       return new Response(upstream.body, { status: 200, headers });
     }
 
-    // ---------- Background music (admin-set, streams for everyone) ----------
+    // ---------- Background music playlist (admin-set, streams for everyone) ----------
+    async function driveSongFromLink(link) {
+      const m = link.match(/\/file\/d\/([\w-]+)/) || link.match(/[?&]id=([\w-]+)/);
+      if (!m) {
+        if (/\/drive\/folders\//.test(link)) {
+          throw new Error('Folder link ito. Kailangan yung link ng mismong kanta: sa Drive, right-click sa mp3 file → Share → Copy link.');
+        }
+        throw new Error('Hindi valid na Google Drive file link.');
+      }
+      let check;
+      try {
+        check = await fetch(`https://drive.usercontent.google.com/download?id=${m[1]}&export=download&confirm=t`);
+      } catch (err) {
+        throw new Error('Hindi maabot ang Drive file. Subukan ulit.');
+      }
+      const ctype = check.headers.get('content-type') || '';
+      if (!check.ok || ctype.includes('text/html')) {
+        throw new Error('Hindi pa public ang file. Sa Drive: right-click → Share → General access → "Anyone with the link" (Viewer), tapos try ulit.');
+      }
+      const cd = check.headers.get('content-disposition') || '';
+      const nm = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+      let name = 'Drive song';
+      if (nm) { try { name = decodeURIComponent(nm[1]); } catch (e) { name = nm[1]; } }
+      try { await check.body.cancel(); } catch (e) {}
+      return { id: m[1], name };
+    }
+
     if (path === '/api/bg-music') {
       if (request.method === 'GET') {
-        return json((await env.KV.get('bg-music', 'json')) || null);
+        return json((await env.KV.get('bg-music', 'json')) || { songs: [] });
       }
       if (request.method === 'POST') {
         if (!(await isAdmin(request, env))) {
           return json({ error: 'Kailangan mag-login bilang admin.' }, 401);
         }
         const form = await request.formData();
-        const file = form.get('song');
-
-        if (!file || typeof file === 'string') {
-          const driveLink = String(form.get('driveLink') || '').trim();
-          if (!driveLink) return json({ error: 'Pumili ng file o mag-paste ng Drive link.' }, 400);
-          const m = driveLink.match(/\/file\/d\/([\w-]+)/) || driveLink.match(/[?&]id=([\w-]+)/);
-          if (!m) {
-            if (/\/drive\/folders\//.test(driveLink)) {
-              return json({ error: 'Folder link ang na-paste mo. Kailangan yung link ng mismong kanta: sa Drive, right-click sa mp3 file → Share → Copy link.' }, 400);
-            }
-            return json({ error: 'Hindi valid na Google Drive file link.' }, 400);
+        const files = form.getAll('song').filter(f => typeof f !== 'string');
+        const links = String(form.get('links') || '').split('\n').map(s => s.trim()).filter(Boolean);
+        if (!files.length && !links.length) {
+          return json({ error: 'Wala kang napiling file o na-paste na link.' }, 400);
+        }
+        for (const f of files) {
+          if (!(f.type || '').startsWith('audio/')) {
+            return json({ error: `Hindi music file ang ${f.name}. Music lang ang pwede (mp3, wav, m4a, atbp.).` }, 400);
           }
-          let check;
+          if (f.size > MAX_FILE_MB * 1024 * 1024) {
+            return json({ error: `Masyadong malaki ang ${f.name}. Limit ay ${MAX_FILE_MB}MB.` }, 400);
+          }
+        }
+        const existing = (await env.KV.get('bg-music', 'json')) || { songs: [] };
+        const songs = Array.isArray(existing.songs) ? [...existing.songs] : [];
+        for (const f of files) {
+          let uploaded;
           try {
-            check = await fetch(`https://drive.usercontent.google.com/download?id=${m[1]}&export=download&confirm=t`);
+            uploaded = await uploadOneToDrive(env, f);
           } catch (err) {
-            return json({ error: 'Hindi maabot ang Drive file. Subukan ulit.' }, 502);
+            return json({ error: err.message }, 500);
           }
-          const ctype = check.headers.get('content-type') || '';
-          if (!check.ok || ctype.includes('text/html')) {
-            return json({ error: 'Hindi pa public ang file. Sa Drive: right-click → Share → General access → "Anyone with the link" (Viewer), tapos try ulit.' }, 400);
+          if (!songs.some(s => s.id === uploaded.id)) songs.push({ id: uploaded.id, name: f.name });
+        }
+        for (const link of links) {
+          let entry;
+          try {
+            entry = await driveSongFromLink(link);
+          } catch (err) {
+            return json({ error: `May problema sa isang link (${link.slice(0, 60)}): ${err.message}` }, 400);
           }
-          const cd = check.headers.get('content-disposition') || '';
-          const nm = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
-          let name = 'Drive song';
-          if (nm) { try { name = decodeURIComponent(nm[1]); } catch (e) { name = nm[1]; } }
-          try { await check.body.cancel(); } catch (e) {}
-          const info = { id: m[1], name };
-          await env.KV.put('bg-music', JSON.stringify(info));
-          return json({ ok: true, ...info });
+          if (!songs.some(s => s.id === entry.id)) songs.push(entry);
         }
-
-        if (!(file.type || '').startsWith('audio/')) {
-          return json({ error: 'Music file lang ang pwede (mp3, wav, m4a, atbp.).' }, 400);
-        }
-        if (file.size > MAX_FILE_MB * 1024 * 1024) {
-          return json({ error: `Masyadong malaki ang ${file.name}. Limit ay ${MAX_FILE_MB}MB.` }, 400);
-        }
-        let uploaded;
-        try {
-          uploaded = await uploadOneToDrive(env, file);
-        } catch (err) {
-          return json({ error: err.message }, 500);
-        }
-        const info = { id: uploaded.id, name: file.name };
-        await env.KV.put('bg-music', JSON.stringify(info));
-        return json({ ok: true, ...info });
+        await env.KV.put('bg-music', JSON.stringify({ songs }));
+        return json({ ok: true, songs });
       }
       if (request.method === 'DELETE') {
         if (!(await isAdmin(request, env))) {
           return json({ error: 'Kailangan mag-login bilang admin.' }, 401);
         }
+        const id = url.searchParams.get('id');
+        if (id) {
+          const existing = (await env.KV.get('bg-music', 'json')) || { songs: [] };
+          const songs = (Array.isArray(existing.songs) ? existing.songs : []).filter(s => s.id !== id);
+          if (songs.length) await env.KV.put('bg-music', JSON.stringify({ songs }));
+          else await env.KV.delete('bg-music');
+          return json({ ok: true, songs });
+        }
         await env.KV.delete('bg-music');
-        return json({ ok: true });
+        return json({ ok: true, songs: [] });
       }
       return json({ error: 'Method not allowed' }, 405);
     }
@@ -309,10 +331,14 @@ export default {
     if (path === '/api/bg-music/stream') {
       if (request.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
       const info = await env.KV.get('bg-music', 'json');
-      if (!info || !info.id) return json({ error: 'Walang music na naka-set.' }, 404);
+      const songs = info && Array.isArray(info.songs) ? info.songs : [];
+      const qi = Number(url.searchParams.get('i') || '0');
+      const idx = Number.isInteger(qi) && qi >= 0 && qi < songs.length ? qi : 0;
+      const target = songs[idx];
+      if (!target || !target.id) return json({ error: 'Walang music na naka-set.' }, 404);
       let upstream;
       try {
-        upstream = await fetch(`https://drive.usercontent.google.com/download?id=${info.id}&export=download&confirm=t`);
+        upstream = await fetch(`https://drive.usercontent.google.com/download?id=${target.id}&export=download&confirm=t`);
       } catch (err) {
         return json({ error: 'Hindi maabot ang music file.' }, 502);
       }

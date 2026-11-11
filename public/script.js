@@ -140,19 +140,39 @@ document.addEventListener('DOMContentLoaded', () => {
   updateLiveCounter();
 
   // ---------- Background Music ----------
-  // Ang kanta ay naka-host sa Google Drive at naka-set ng admin (KV 'bg-music')
+  // Naka-host ang mga kanta sa Google Drive at naka-set ng admin (KV 'bg-music')
   // dahil hindi pwedeng ilagay ang copyrighted songs sa public repo.
   const bgMusic = document.getElementById('bgMusic');
   const musicBtn = document.getElementById('musicBtn');
   const musicText = document.getElementById('musicText');
+  const prevSongBtn = document.getElementById('prevSongBtn');
+  const nextSongBtn = document.getElementById('nextSongBtn');
+  const nowPlaying = document.getElementById('nowPlaying');
   let userWantsMusic = true;
   let pausedForMedia = false;
-  let currentSong = null;
+  let playlist = [];
+  let songIndex = 0;
 
   bgMusic.volume = 0.35;
 
   function setMusicLabel() {
     musicText.textContent = bgMusic.paused ? 'Play Our Song' : 'Pause Music';
+  }
+
+  function updateMusicUI() {
+    const cur = playlist[songIndex];
+    if (cur && playlist.length) {
+      nowPlaying.textContent = '\u266A ' + cur.name;
+      nowPlaying.style.display = '';
+      musicBtn.style.display = '';
+    } else {
+      nowPlaying.style.display = 'none';
+      musicBtn.style.display = 'none';
+    }
+    const many = playlist.length > 1;
+    prevSongBtn.style.display = many ? '' : 'none';
+    nextSongBtn.style.display = many ? '' : 'none';
+    setMusicLabel();
   }
 
   function pauseMusicForMedia() {
@@ -183,35 +203,63 @@ document.addEventListener('DOMContentLoaded', () => {
     setMusicLabel();
   });
 
+  function switchSong(step) {
+    if (playlist.length < 2) return;
+    songIndex = (songIndex + step + playlist.length) % playlist.length;
+    userWantsMusic = true;
+    pausedForMedia = false;
+    startSong();
+  }
+  prevSongBtn.addEventListener('click', () => switchSong(-1));
+  nextSongBtn.addEventListener('click', () => switchSong(1));
+
   function armAutoplayFallback() {
     // Binabaran ng browser ang autoplay na may tunog hangga't walang interaction —
     // unang tap/keypress kahit saan ang magbubukas ng kanta.
     const startMusic = () => {
       document.removeEventListener('pointerdown', startMusic);
       document.removeEventListener('keydown', startMusic);
-      if (userWantsMusic && bgMusic.paused) bgMusic.play().then(setMusicLabel).catch(() => {});
+      if (userWantsMusic && !pausedForMedia && bgMusic.paused) bgMusic.play().then(setMusicLabel).catch(() => {});
     };
     document.addEventListener('pointerdown', startMusic);
     document.addEventListener('keydown', startMusic);
   }
 
   function startSong() {
-    if (!currentSong || !currentSong.id) return;
-    bgMusic.src = '/api/bg-music/stream?v=' + encodeURIComponent(currentSong.id);
+    const cur = playlist[songIndex];
+    if (!cur || !cur.id) return;
+    bgMusic.src = '/api/bg-music/stream?i=' + songIndex + '&v=' + encodeURIComponent(cur.id);
     bgMusic.load();
     bgMusic.play().then(setMusicLabel).catch(armAutoplayFallback);
-    bgMusic.addEventListener('canplay', () => { musicBtn.style.display = ''; }, { once: true });
-    bgMusic.addEventListener('error', () => { musicBtn.style.display = 'none'; }, { once: true });
+    updateMusicUI();
   }
+
+  function stopMusicPlayback() {
+    bgMusic.pause();
+    bgMusic.removeAttribute('src');
+    bgMusic.load();
+    playlist = [];
+    songIndex = 0;
+    pausedForMedia = false;
+    userWantsMusic = true;
+    updateMusicUI();
+  }
+
+  bgMusic.addEventListener('error', () => {
+    if (!playlist.length) musicBtn.style.display = 'none';
+  });
 
   (async function initMusic() {
     try {
       const res = await fetch('/api/bg-music');
-      currentSong = await res.json();
+      const data = await res.json();
+      playlist = (data && Array.isArray(data.songs)) ? data.songs : [];
     } catch (e) {
-      currentSong = null;
+      playlist = [];
     }
-    if (currentSong && currentSong.id) startSong();
+    songIndex = 0;
+    if (playlist.length) startSong();
+    updateMusicUI();
   })();
 
   // ---------- Elements ----------
@@ -288,59 +336,97 @@ document.addEventListener('DOMContentLoaded', () => {
   const musicAdminBtn = document.getElementById('musicAdminBtn');
   const bgMusicModal = document.getElementById('bgMusicModal');
   const closeBgMusicBtn = document.getElementById('closeBgMusicBtn');
-  const currentSongLabel = document.getElementById('currentSongLabel');
+  const playlistList = document.getElementById('playlistList');
   const songFile = document.getElementById('songFile');
-  const songDriveLink = document.getElementById('songDriveLink');
+  const songLinks = document.getElementById('songLinks');
   const saveSongBtn = document.getElementById('saveSongBtn');
   const removeSongBtn = document.getElementById('removeSongBtn');
   const songStatusMsg = document.getElementById('songStatusMsg');
 
-  async function refreshSongLabel() {
-    try {
-      const res = await fetch('/api/bg-music');
-      const info = await res.json();
-      currentSongLabel.textContent = (info && info.id)
-        ? 'Kasalukuyang kanta: ' + (info.name || 'naka-set na')
-        : 'Wala pang naka-set na kanta.';
-    } catch (e) {
-      currentSongLabel.textContent = '';
+  function renderPlaylist() {
+    if (!playlist.length) {
+      playlistList.innerHTML = '<p class="playlist-empty">Wala pang naka-set na kanta.</p>';
+      return;
     }
+    playlistList.innerHTML = playlist.map((s, i) => `
+      <div class="existing-media-item">
+        <div class="mini-icon"><i class="fa-solid fa-music"></i></div>
+        <span class="existing-name">${esc(s.name || ('Kanta ' + (i + 1)))}</span>
+        <button type="button" class="remove-media-btn" data-remove-song="${escAttr(s.id)}" title="Remove">&times;</button>
+      </div>`).join('');
   }
 
   musicAdminBtn.addEventListener('click', () => {
     songStatusMsg.textContent = '';
-    refreshSongLabel();
+    renderPlaylist();
     showModal(bgMusicModal);
   });
 
   closeBgMusicBtn.addEventListener('click', () => hideModal(bgMusicModal));
 
+  playlistList.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-remove-song]');
+    if (!btn) return;
+    removeOneSong(btn.dataset.removeSong);
+  });
+
+  async function removeOneSong(id) {
+    const wasCurrent = !!(playlist[songIndex] && playlist[songIndex].id === id);
+    songStatusMsg.style.color = '#70d6ff';
+    songStatusMsg.textContent = 'Bine-bura ang kanta...';
+    try {
+      const res = await fetch('/api/bg-music?id=' + encodeURIComponent(id), { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Server error occurred.');
+      playlist = data.songs || [];
+      if (!playlist.length) {
+        stopMusicPlayback();
+      } else {
+        if (wasCurrent || songIndex >= playlist.length) {
+          songIndex = Math.min(songIndex, playlist.length - 1);
+          if (userWantsMusic && !pausedForMedia) startSong();
+          else updateMusicUI();
+        } else {
+          updateMusicUI();
+        }
+      }
+      renderPlaylist();
+      songStatusMsg.style.color = '#38ef7d';
+      songStatusMsg.textContent = 'Nabura ang kanta.';
+    } catch (err) {
+      songStatusMsg.style.color = '#ff4b72';
+      songStatusMsg.textContent = err.message;
+    }
+  }
+
   saveSongBtn.addEventListener('click', async () => {
-    const f = songFile.files[0];
-    const link = songDriveLink.value.trim();
-    if (!f && !link) {
+    const files = songFile.files;
+    const links = songLinks.value.split('\n').map(s => s.trim()).filter(Boolean);
+    if (!files.length && !links.length) {
       songStatusMsg.style.color = '#ff4b72';
       songStatusMsg.textContent = 'Pumili ng file o mag-paste ng Drive link.';
       return;
     }
     songStatusMsg.style.color = '#70d6ff';
-    songStatusMsg.textContent = f ? 'Ina-upload ang kanta sa Drive...' : 'Sine-save ang Drive link...';
+    songStatusMsg.textContent = files.length ? 'Ina-upload ang mga kanta sa Drive...' : 'Sine-save ang mga Drive link...';
     saveSongBtn.disabled = true;
     const fd = new FormData();
-    if (f) fd.append('song', f); else fd.append('driveLink', link);
+    for (const f of files) fd.append('song', f);
+    if (links.length) fd.append('links', songLinks.value);
     try {
       const res = await fetch('/api/bg-music', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Server error occurred.');
-      currentSong = data;
+      playlist = data.songs || [];
+      songIndex = 0;
       userWantsMusic = true;
       pausedForMedia = false;
-      startSong();
+      if (playlist.length) startSong();
+      renderPlaylist();
       songStatusMsg.style.color = '#38ef7d';
-      songStatusMsg.textContent = 'Kanta naka-set na: ' + (data.name || (f ? f.name : 'Drive song'));
+      songStatusMsg.textContent = 'Naka-set na! ' + playlist.length + ' kanta sa playlist.';
       songFile.value = '';
-      songDriveLink.value = '';
-      refreshSongLabel();
+      songLinks.value = '';
     } catch (err) {
       songStatusMsg.style.color = '#ff4b72';
       songStatusMsg.textContent = err.message;
@@ -356,16 +442,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch('/api/bg-music', { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Server error occurred.');
-      currentSong = null;
-      bgMusic.pause();
-      bgMusic.removeAttribute('src');
-      bgMusic.load();
-      musicBtn.style.display = 'none';
-      pausedForMedia = false;
-      userWantsMusic = true;
+      stopMusicPlayback();
+      renderPlaylist();
       songStatusMsg.style.color = '#38ef7d';
       songStatusMsg.textContent = 'Music naka-off na.';
-      refreshSongLabel();
     } catch (err) {
       songStatusMsg.style.color = '#ff4b72';
       songStatusMsg.textContent = err.message;
