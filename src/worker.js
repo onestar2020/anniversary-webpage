@@ -332,9 +332,16 @@ export default {
       if (request.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
       const info = await env.KV.get('bg-music', 'json');
       const songs = info && Array.isArray(info.songs) ? info.songs : [];
+      // v = file id ng kantang naka-shuffle sa frontend; hanapin sa playlist
+      // (hindi open proxy — yung ID lang na nasa admin-set playlist ang puwedeng i-stream)
+      const vid = url.searchParams.get('v');
       const qi = Number(url.searchParams.get('i') || '0');
-      const idx = Number.isInteger(qi) && qi >= 0 && qi < songs.length ? qi : 0;
-      const target = songs[idx];
+      let target = null;
+      if (vid) target = songs.find(s => s.id === vid) || null;
+      if (!target) {
+        const idx = Number.isInteger(qi) && qi >= 0 && qi < songs.length ? qi : 0;
+        target = songs[idx];
+      }
       if (!target || !target.id) return json({ error: 'Walang music na naka-set.' }, 404);
       let upstream;
       try {

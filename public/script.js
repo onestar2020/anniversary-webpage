@@ -281,7 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cur = playlist[songIndex];
     if (!cur || !cur.id) return;
     wakeAudioCtx();
-    bgMusic.src = '/api/bg-music/stream?i=' + songIndex + '&v=' + encodeURIComponent(cur.id);
+    bgMusic.src = '/api/bg-music/stream?v=' + encodeURIComponent(cur.id);
     bgMusic.load();
     bgMusic.play().then(setMusicLabel).catch(armAutoplayFallback);
     armAutoplayFallback();
