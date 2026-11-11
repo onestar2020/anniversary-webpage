@@ -1,0 +1,12 @@
+{
+  "name": "anniversary-webpage",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+  "kv_namespaces": [
+    { "binding": "KV", "id": "8a5fc82b8a2a4f70aeb3ecaecb92db40" }
+  ]
+}

@@ -1,17 +1,12 @@
 {
   "name": "anniversary-webpage",
-  "version": "1.0.0",
-  "description": "",
-  "main": "script.js",
+  "private": true,
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "express": "^5.3.0",
-    "multer": "^2.5.0"
+  "devDependencies": {
+    "wrangler": "^4.0.0"
   }
 }

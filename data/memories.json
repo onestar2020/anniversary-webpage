@@ -8,8 +8,8 @@
     "media": [
       {
         "type": "image",
-        "src": "/uploads/1794356853048-384381480.png",
-        "provider": "local",
+        "src": "/api/media/seed-photo-1.png",
+        "provider": "kv",
         "name": ""
       }
     ]
@@ -23,23 +23,52 @@
     "media": [
       {
         "type": "image",
-        "src": "/uploads/1794357744147-236352885.png",
-        "provider": "local",
+        "src": "/api/media/seed-photo-2.png",
+        "provider": "kv",
         "name": ""
       }
     ]
   },
   {
-    "id": 1794357813401,
-    "date": "2026-11-14",
-    "title": "GE GE GE",
-    "text": "GO GO GO",
-    "type": "image",
+    "id": 1794368352666,
+    "date": "2026-12-11",
+    "title": "OOOO",
+    "text": "FGHJNTYN",
     "media": [
       {
         "type": "image",
-        "src": "/uploads/1794357813398-42708525.png",
-        "provider": "local",
+        "provider": "kv",
+        "src": "/api/media/seed-photo-3.png",
+        "name": "Screenshot 2026-10-19 095830.png"
+      },
+      {
+        "type": "image",
+        "provider": "kv",
+        "src": "/api/media/seed-photo-4.png",
+        "name": "Screenshot 2026-10-19 100115.png"
+      },
+      {
+        "type": "image",
+        "provider": "kv",
+        "src": "/api/media/seed-photo-5.png",
+        "name": "Screenshot 2026-10-19 100250.png"
+      },
+      {
+        "type": "image",
+        "provider": "kv",
+        "src": "/api/media/seed-photo-6.png",
+        "name": "Screenshot 2026-10-19 100650.png"
+      },
+      {
+        "type": "image",
+        "provider": "kv",
+        "src": "/api/media/seed-photo-7.png",
+        "name": "Screenshot 2026-10-19 101019.png"
+      },
+      {
+        "type": "video",
+        "provider": "youtube",
+        "src": "https://www.youtube.com/watch?v=_hZswO99mjo",
         "name": ""
       }
     ]
