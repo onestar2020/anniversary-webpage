@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Our Journey | 9th Anniversary</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+  <!-- Background Animated Hearts -->
+  <div class="bg-hearts"></div>
+
+  <!-- Hero Banner -->
+  <header class="hero">
+    <div class="hero-content">
+      <h1 class="couple-names">Jay & Justhel</h1>
+      <p class="anniversary-tag">Happy 9th Anniversary • Dec 29, 2026</p>
+      <div class="counter-box" id="countdown"></div>
+    </div>
+  </header>
+
+  <!-- Main Timeline Section -->
+  <main class="container">
+    <div class="section-header">
+      <h2><i class="fa-solid fa-heart-pulse"></i> Ang Ating Kuwento</h2>
+      <button class="btn-admin" id="openAdminBtn">
+        <i class="fa-solid fa-plus"></i> Magdagdag ng Alaala
+      </button>
+    </div>
+
+    <div class="timeline" id="timelineContainer">
+      <p class="loading-text">Kina-karga ang ating mga alaala...</p>
+    </div>
+  </main>
+
+  <!-- Admin Modal Upload Form -->
+  <div class="modal" id="adminModal">
+    <div class="modal-content glass-card">
+      <span class="close-btn" id="closeAdminBtn">&times;</span>
+      <h3><i class="fa-solid fa-lock"></i> Add New Memory</h3>
+      <form id="memoryForm" enctype="multipart/form-data">
+        
+        <div class="input-group">
+          <label><i class="fa-solid fa-key"></i> Admin Password</label>
+          <input type="password" id="password" name="password" placeholder="Enter Admin Password" required>
+        </div>
+
+        <div class="input-group">
+          <label><i class="fa-solid fa-calendar-day"></i> Petsa</label>
+          <input type="date" id="date" name="date" required>
+        </div>
+
+        <div class="input-group">
+          <label><i class="fa-solid fa-heading"></i> Pamagat</label>
+          <input type="text" id="title" name="title" placeholder="Halimbawa: Unang Date Natin" required>
+        </div>
+
+        <div class="input-group">
+          <label><i class="fa-solid fa-align-left"></i> Mensahe / Kuwento</label>
+          <textarea id="text" name="text" rows="4" placeholder="Isulat ang iyong alaala dito..."></textarea>
+        </div>
+
+        <div class="input-group">
+          <label><i class="fa-solid fa-photo-film"></i> Uri ng Media</label>
+          <select id="type" name="type">
+            <option value="image">Larawan (Image File)</option>
+            <option value="video">Video (Upload o Embed Link)</option>
+            <option value="audio">Audio / Kanta (MP3 File)</option>
+          </select>
+        </div>
+
+        <div class="input-group" id="fileUploadGroup">
+          <label><i class="fa-solid fa-upload"></i> Pumili ng File</label>
+          <input type="file" id="media" name="media" accept="image/*,video/*,audio/*">
+        </div>
+
+        <div class="input-group" id="videoLinkGroup" style="display: none;">
+          <label><i class="fa-solid fa-link"></i> Video Link (Optional)</label>
+          <input type="url" id="videoLink" name="videoLink" placeholder="https://youtube.com/embed/...">
+        </div>
+
+        <button type="submit" class="btn-submit" id="submitBtn">
+          <i class="fa-solid fa-paper-plane"></i> I-save ang Alaala
+        </button>
+
+        <p class="status-msg" id="statusMsg"></p>
+      </form>
+    </div>
+  </div>
+
+  <footer>
+    <p>Hand-crafted with ❤️ for Justhel Kate Malaubang | Dec 29, 2017 - Forever</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
