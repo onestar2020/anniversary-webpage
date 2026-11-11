@@ -1,5 +1,5 @@
 const SESSION_TTL = 7 * 24 * 60 * 60; // 7 days (seconds)
-const MAX_FILE_MB = 45; // Apps Script POST practical limit is ~50MB; keep margin
+const MAX_FILE_MB = 30; // Apps Script text/plain POST limit is ~50MB; base64 inflates by 4/3, keep margin
 
 const EXT_TYPES = {
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif',
@@ -90,23 +90,50 @@ function json(obj, status = 200, headers = {}) {
   });
 }
 
+function toBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
+}
+
+// Apps Script web apps don't parse multipart file parts from server-side
+// requests (e.parameters stays empty), so each file is sent as a JSON body
+// with base64 data read from e.postData.contents.
+async function uploadOneToDrive(env, file) {
+  const payload = {
+    key: env.DRIVE_SCRIPT_KEY,
+    name: file.name,
+    type: file.type || extType(file.name),
+    data: toBase64(await file.arrayBuffer())
+  };
+  let res;
+  try {
+    res = await fetch(env.DRIVE_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload)
+    });
+  } catch (err) {
+    throw new Error('Hindi maabot ang Drive uploader: ' + err.message);
+  }
+  if (!res.ok) throw new Error(`Drive upload failed (HTTP ${res.status}) para sa ${file.name}.`);
+  const data = await res.json();
+  if (!data.ok || !data.file) {
+    throw new Error(`Drive upload failed para sa ${file.name}: ${data.error || 'unknown'}`);
+  }
+  return data.file;
+}
+
 async function uploadFilesToDrive(env, files) {
   if (!env.DRIVE_SCRIPT_URL || !env.DRIVE_SCRIPT_KEY) {
     throw new Error('Drive upload hindi pa naka-set up. Kailangan munang i-deploy ang Apps Script at i-set ang DRIVE_SCRIPT_URL at DRIVE_SCRIPT_KEY secrets.');
   }
-  const fd = new FormData();
-  fd.append('key', env.DRIVE_SCRIPT_KEY);
-  for (const f of files) fd.append('file', f, f.name);
-  let res;
-  try {
-    res = await fetch(env.DRIVE_SCRIPT_URL, { method: 'POST', body: fd });
-  } catch (err) {
-    throw new Error('Hindi maabot ang Drive uploader: ' + err.message);
-  }
-  if (!res.ok) throw new Error('Drive upload failed (HTTP ' + res.status + ').');
-  const data = await res.json();
-  if (!data.ok) throw new Error('Drive upload failed: ' + (data.error || 'unknown'));
-  return data.files;
+  const results = [];
+  for (const f of files) results.push(await uploadOneToDrive(env, f));
+  return results;
 }
 
 function collectValidFiles(form) {
