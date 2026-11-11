@@ -148,12 +148,59 @@ document.addEventListener('DOMContentLoaded', () => {
   const prevSongBtn = document.getElementById('prevSongBtn');
   const nextSongBtn = document.getElementById('nextSongBtn');
   const nowPlaying = document.getElementById('nowPlaying');
+  const volumeWrap = document.getElementById('volumeWrap');
+  const volumeSlider = document.getElementById('volumeSlider');
   let userWantsMusic = true;
   let pausedForMedia = false;
   let playlist = [];
   let songIndex = 0;
 
-  bgMusic.volume = 0.35;
+  // Volume: ginagamit ang Web Audio gain dahil sa iPhone walang epekto ang
+  // audio.volume — ang gain node lang ang gumagana roon.
+  let musicVolume = 0.35;
+  let audioCtx = null;
+  let gainNode = null;
+  try {
+    const saved = parseFloat(localStorage.getItem('annivMusicVolume'));
+    if (saved >= 0 && saved <= 1) musicVolume = saved;
+  } catch (e) {}
+
+  function wakeAudioCtx() {
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  }
+
+  function applyVolume() {
+    if (gainNode) gainNode.gain.value = musicVolume;
+    else bgMusic.volume = musicVolume;
+    volumeSlider.value = Math.round(musicVolume * 100);
+    try { localStorage.setItem('annivMusicVolume', String(musicVolume)); } catch (e) {}
+  }
+
+  (function initWebAudio() {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      audioCtx = new Ctx();
+      const src = audioCtx.createMediaElementSource(bgMusic);
+      gainNode = audioCtx.createGain();
+      gainNode.gain.value = musicVolume;
+      src.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      bgMusic.volume = 1;
+    } catch (e) {
+      audioCtx = null;
+      gainNode = null;
+      bgMusic.volume = musicVolume;
+    }
+  })();
+
+  applyVolume();
+
+  volumeSlider.addEventListener('input', () => {
+    musicVolume = Number(volumeSlider.value) / 100;
+    applyVolume();
+    wakeAudioCtx();
+  });
 
   function setMusicLabel() {
     musicText.textContent = bgMusic.paused ? 'Play Our Song' : 'Pause Music';
@@ -165,9 +212,11 @@ document.addEventListener('DOMContentLoaded', () => {
       nowPlaying.textContent = '\u266A ' + cur.name;
       nowPlaying.style.display = '';
       musicBtn.style.display = '';
+      volumeWrap.style.display = '';
     } else {
       nowPlaying.style.display = 'none';
       musicBtn.style.display = 'none';
+      volumeWrap.style.display = 'none';
     }
     const many = playlist.length > 1;
     prevSongBtn.style.display = many ? '' : 'none';
@@ -192,6 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   musicBtn.addEventListener('click', () => {
+    wakeAudioCtx();
     if (bgMusic.paused) {
       userWantsMusic = true;
       pausedForMedia = false;
@@ -208,6 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
     songIndex = (songIndex + step + playlist.length) % playlist.length;
     userWantsMusic = true;
     pausedForMedia = false;
+    wakeAudioCtx();
     startSong();
   }
   prevSongBtn.addEventListener('click', () => switchSong(-1));
@@ -219,6 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const startMusic = () => {
       document.removeEventListener('pointerdown', startMusic);
       document.removeEventListener('keydown', startMusic);
+      wakeAudioCtx();
       if (userWantsMusic && !pausedForMedia && bgMusic.paused) bgMusic.play().then(setMusicLabel).catch(() => {});
     };
     document.addEventListener('pointerdown', startMusic);
@@ -228,6 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function startSong() {
     const cur = playlist[songIndex];
     if (!cur || !cur.id) return;
+    wakeAudioCtx();
     bgMusic.src = '/api/bg-music/stream?i=' + songIndex + '&v=' + encodeURIComponent(cur.id);
     bgMusic.load();
     bgMusic.play().then(setMusicLabel).catch(armAutoplayFallback);

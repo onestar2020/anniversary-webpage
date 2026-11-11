@@ -42,6 +42,10 @@
       <button class="btn-music-nav" id="nextSongBtn" style="display:none;" title="Next Song">
         <i class="fa-solid fa-forward-step"></i>
       </button>
+      <span class="volume-wrap" id="volumeWrap" style="display:none;">
+        <i class="fa-solid fa-volume-high"></i>
+        <input type="range" id="volumeSlider" min="0" max="100" step="5" value="35" title="Volume">
+      </span>
     </div>
     <p class="now-playing" id="nowPlaying" style="display:none;"></p>
     <audio id="bgMusic" loop preload="auto"></audio>
