@@ -284,6 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
     bgMusic.src = '/api/bg-music/stream?i=' + songIndex + '&v=' + encodeURIComponent(cur.id);
     bgMusic.load();
     bgMusic.play().then(setMusicLabel).catch(armAutoplayFallback);
+    armAutoplayFallback();
     updateMusicUI();
   }
 
@@ -311,6 +312,11 @@ document.addEventListener('DOMContentLoaded', () => {
       playlist = [];
     }
     songIndex = 0;
+    // Random na pagkakasunod-sunod bawat pagbukas ng page
+    for (let i = playlist.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [playlist[i], playlist[j]] = [playlist[j], playlist[i]];
+    }
     if (playlist.length) startSong();
     updateMusicUI();
   })();
