@@ -35,6 +35,16 @@ document.addEventListener('DOMContentLoaded', () => {
     return m ? `https://drive.google.com/file/d/${m[1]}/preview` : url;
   }
 
+  function driveImgSrc(url, size) {
+    const m = url.match(/\/file\/d\/([\w-]+)/) || url.match(/[?&]id=([\w-]+)/);
+    return m ? `https://lh3.googleusercontent.com/d/${m[1]}${size ? '=' + size : ''}` : url;
+  }
+
+  function driveAudioSrc(url) {
+    const m = url.match(/\/file\/d\/([\w-]+)/) || url.match(/[?&]id=([\w-]+)/);
+    return m ? `https://docs.google.com/uc?export=download&id=${m[1]}` : url;
+  }
+
   function toYouTubeEmbed(url) {
     const m = url.match(/[?&]v=([\w-]+)/) || url.match(/youtu\.be\/([\w-]+)/) ||
               url.match(/\/shorts\/([\w-]+)/) || url.match(/\/embed\/([\w-]+)/);
@@ -315,7 +325,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderMediaTile(item, idx) {
     if (item.type === 'image') {
-      return `<img class="tile-img" src="${escAttr(item.src)}" alt="memory photo" loading="lazy">`;
+      const src = item.provider === 'gdrive' ? driveImgSrc(item.src, 'w600') : item.src;
+      return `<img class="tile-img" src="${escAttr(src)}" alt="memory photo" loading="lazy">`;
     }
     if (item.type === 'video') {
       if (hasProviderIcon(item)) {
@@ -416,7 +427,8 @@ document.addEventListener('DOMContentLoaded', () => {
     existingMediaList.innerHTML = editKept.map((m, i) => {
       let preview;
       if (m.type === 'image') {
-        preview = `<img src="${escAttr(m.src)}" alt="">`;
+        const pSrc = m.provider === 'gdrive' ? driveImgSrc(m.src, 'w200') : m.src;
+        preview = `<img src="${escAttr(pSrc)}" alt="">`;
       } else if (m.type === 'audio') {
         preview = `<div class="mini-icon"><i class="fa-solid fa-music"></i></div>`;
       } else {
@@ -519,7 +531,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const item = items[lightbox.index];
 
     if (item.type === 'image') {
-      lightboxStage.innerHTML = `<img src="${escAttr(item.src)}" alt="memory">`;
+      const src = item.provider === 'gdrive' ? driveImgSrc(item.src) : item.src;
+      lightboxStage.innerHTML = `<img src="${escAttr(src)}" alt="memory">`;
     } else if (item.type === 'video') {
       if (hasProviderIcon(item)) {
         lightboxStage.innerHTML = `<iframe src="${escAttr(embedSrc(item))}" allow="autoplay; fullscreen" allowfullscreen frameborder="0"></iframe>`;
@@ -528,11 +541,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } else if (item.type === 'audio') {
       const name = item.name || item.src.split('/').pop();
+      const audioSrc = item.provider === 'gdrive' ? driveAudioSrc(item.src) : item.src;
       lightboxStage.innerHTML = `
         <div class="lightbox-audio">
           <i class="fa-solid fa-compact-disc disc-spin"></i>
           <div class="audio-title">${esc(name)}</div>
-          <audio src="${escAttr(item.src)}" controls autoplay></audio>
+          <audio src="${escAttr(audioSrc)}" controls autoplay></audio>
         </div>`;
     }
 

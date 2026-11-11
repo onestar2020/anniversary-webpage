@@ -1,5 +1,5 @@
 const SESSION_TTL = 7 * 24 * 60 * 60; // 7 days (seconds)
-const MAX_FILE_MB = 24; // KV value limit is 25MB; keep margin
+const MAX_FILE_MB = 45; // Apps Script POST practical limit is ~50MB; keep margin
 
 const EXT_TYPES = {
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif',
@@ -7,12 +7,6 @@ const EXT_TYPES = {
   '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime', '.m4v': 'video/mp4',
   '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4',
   '.aac': 'audio/aac', '.flac': 'audio/flac'
-};
-
-const MIME_EXT = {
-  'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp',
-  'video/mp4': '.mp4', 'video/webm': '.webm', 'video/quicktime': '.mov',
-  'audio/mpeg': '.mp3', 'audio/wav': '.wav', 'audio/ogg': '.ogg', 'audio/mp4': '.m4a'
 };
 
 function extType(name) {
@@ -96,12 +90,47 @@ function json(obj, status = 200, headers = {}) {
   });
 }
 
-function makeFileMedia(file) {
-  const mime = file.type || '';
-  let ext = (file.name.match(/\.[a-z0-9]+$/i) || [''])[0].toLowerCase();
-  if (!ext && MIME_EXT[mime]) ext = MIME_EXT[mime];
-  const key = 'media:' + Date.now() + '-' + Math.round(Math.random() * 1e9) + ext;
-  return { key, mime: mime || extType(file.name), item: null, name: file.name };
+async function uploadFilesToDrive(env, files) {
+  if (!env.DRIVE_SCRIPT_URL || !env.DRIVE_SCRIPT_KEY) {
+    throw new Error('Drive upload hindi pa naka-set up. Kailangan munang i-deploy ang Apps Script at i-set ang DRIVE_SCRIPT_URL at DRIVE_SCRIPT_KEY secrets.');
+  }
+  const fd = new FormData();
+  fd.append('key', env.DRIVE_SCRIPT_KEY);
+  for (const f of files) fd.append('file', f, f.name);
+  let res;
+  try {
+    res = await fetch(env.DRIVE_SCRIPT_URL, { method: 'POST', body: fd });
+  } catch (err) {
+    throw new Error('Hindi maabot ang Drive uploader: ' + err.message);
+  }
+  if (!res.ok) throw new Error('Drive upload failed (HTTP ' + res.status + ').');
+  const data = await res.json();
+  if (!data.ok) throw new Error('Drive upload failed: ' + (data.error || 'unknown'));
+  return data.files;
+}
+
+function collectValidFiles(form) {
+  const files = [];
+  for (const file of form.getAll('media')) {
+    if (typeof file === 'string') continue;
+    if (file.size > MAX_FILE_MB * 1024 * 1024) {
+      return { error: `Masyadong malaki ang ${file.name}. Limit ay ${MAX_FILE_MB}MB.` };
+    }
+    if (!['image/', 'video/', 'audio/'].some(t => (file.type || '').startsWith(t))) {
+      return { error: 'Hindi suportadong file type. Images, videos, at music lang.' };
+    }
+    files.push(file);
+  }
+  return { files };
+}
+
+function driveEntries(files, uploaded) {
+  return uploaded.map((u, i) => ({
+    type: detectType(files[i].name, files[i].type),
+    provider: 'gdrive',
+    src: 'https://drive.google.com/file/d/' + u.id + '/view',
+    name: files[i].name
+  }));
 }
 
 export default {
@@ -185,18 +214,15 @@ export default {
           return json({ error: `Hindi suportadong link: ${invalid[0]}. Gumamit ng Google Drive, YouTube, o direktang image/audio file link.` }, 400);
         }
 
-        const fileMedia = [];
-        for (const file of form.getAll('media')) {
-          if (typeof file === 'string') continue;
-          if (file.size > MAX_FILE_MB * 1024 * 1024) {
-            return json({ error: `Masyadong malaki ang ${file.name}. Limit ay ${MAX_FILE_MB}MB.` }, 400);
+        const { files, error: fileError } = collectValidFiles(form);
+        if (fileError) return json({ error: fileError }, 400);
+        let fileMedia = [];
+        if (files.length) {
+          try {
+            fileMedia = driveEntries(files, await uploadFilesToDrive(env, files));
+          } catch (err) {
+            return json({ error: err.message }, 500);
           }
-          if (!['image/', 'video/', 'audio/'].some(t => (file.type || '').startsWith(t))) {
-            return json({ error: 'Hindi suportadong file type. Images, videos, at music lang.' }, 400);
-          }
-          const f = makeFileMedia(file);
-          await env.KV.put(f.key, await file.arrayBuffer(), { metadata: { ct: f.mime } });
-          fileMedia.push({ type: detectType(f.name, f.mime), provider: 'kv', src: '/api/media/' + f.key, name: f.name });
         }
 
         const memories = (await env.KV.get('memories', 'json')) || [];
@@ -259,18 +285,15 @@ export default {
           return json({ error: `Hindi suportadong link: ${invalid[0]}. Gumamit ng Google Drive, YouTube, o direktang image/audio file link.` }, 400);
         }
 
-        const fileMedia = [];
-        for (const file of form.getAll('media')) {
-          if (typeof file === 'string') continue;
-          if (file.size > MAX_FILE_MB * 1024 * 1024) {
-            return json({ error: `Masyadong malaki ang ${file.name}. Limit ay ${MAX_FILE_MB}MB.` }, 400);
+        const { files, error: fileError } = collectValidFiles(form);
+        if (fileError) return json({ error: fileError }, 400);
+        let fileMedia = [];
+        if (files.length) {
+          try {
+            fileMedia = driveEntries(files, await uploadFilesToDrive(env, files));
+          } catch (err) {
+            return json({ error: err.message }, 500);
           }
-          if (!['image/', 'video/', 'audio/'].some(t => (file.type || '').startsWith(t))) {
-            return json({ error: 'Hindi suportadong file type. Images, videos, at music lang.' }, 400);
-          }
-          const f = makeFileMedia(file);
-          await env.KV.put(f.key, await file.arrayBuffer(), { metadata: { ct: f.mime } });
-          fileMedia.push({ type: detectType(f.name, f.mime), provider: 'kv', src: '/api/media/' + f.key, name: f.name });
         }
 
         memories[idx].title = title || memories[idx].title;
