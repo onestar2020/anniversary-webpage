@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Happy Anniversary, Mamang!</title>
+  <title>Our Journey | Jay & Justhel</title>
   <link rel="stylesheet" href="style.css">
   <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -11,24 +11,28 @@
 <body>
 
   <!-- Floating Hearts Background -->
-  <div class="hearts-bg"></div>
+  <div class="hearts-bg" id="heartsBg"></div>
 
   <!-- Hero Header -->
   <header class="hero">
-    <h1 class="title">Happy 9th Anniversary!</h1>
-    <p class="subtitle">Our Journey Since December 29, 2017</p>
+    <h1 class="title" id="heroTitle">Happy Anniversary!</h1>
+    <p class="subtitle">Jay <i class="fa-solid fa-heart"></i> Justhel &bull; Together since December 29, 2017</p>
+
+    <!-- Live Date -->
+    <p class="live-date" id="liveDate">&nbsp;</p>
 
     <!-- Real-Time Counter Box -->
     <div class="timer-container" id="liveTimer">
-      <div class="time-card"><span id="years">0</span><label>Years</label></div>
-      <div class="time-card"><span id="days">0</span><label>Days</label></div>
-      <div class="time-card"><span id="hours">0</span><label>Hours</label></div>
-      <div class="time-card"><span id="minutes">0</span><label>Minutes</label></div>
-      <div class="time-card"><span id="seconds">0</span><label>Seconds</label></div>
+      <div class="time-card"><span id="years">--</span><label>Years</label></div>
+      <div class="time-card"><span id="months">--</span><label>Months</label></div>
+      <div class="time-card"><span id="days">--</span><label>Days</label></div>
+      <div class="time-card"><span id="hours">--</span><label>Hours</label></div>
+      <div class="time-card"><span id="minutes">--</span><label>Minutes</label></div>
+      <div class="time-card"><span id="seconds">--</span><label>Seconds</label></div>
     </div>
 
     <!-- Background Music Toggle -->
-    <button class="btn-music" id="musicBtn">
+    <button class="btn-music" id="musicBtn" style="display:none;">
       <i class="fa-solid fa-music"></i> <span id="musicText">Play Our Song</span>
     </button>
     <audio id="bgMusic" loop src="/uploads/our-song.mp3"></audio>
@@ -37,10 +41,15 @@
   <!-- Main Content Area -->
   <main class="container">
     <div class="section-top">
-      <h2><i class="fa-solid fa-heart"></i> Our Story & Memories</h2>
-      <button class="btn-admin" id="openAdminBtn">
-        <i class="fa-solid fa-plus"></i> Add New Memory
-      </button>
+      <h2><i class="fa-solid fa-heart"></i> Our Story &amp; Memories</h2>
+      <div class="admin-controls">
+        <button class="btn-logout" id="logoutBtn" style="display:none;" title="Logout">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+        <button class="btn-admin" id="openAdminBtn">
+          <i class="fa-solid fa-plus"></i> Add New Memory
+        </button>
+      </div>
     </div>
 
     <!-- Dynamic Timeline Grid -->
@@ -59,17 +68,31 @@
     </section>
   </main>
 
-  <!-- Upload Modal -->
-  <div class="modal" id="adminModal">
+  <!-- Admin Login Modal -->
+  <div class="modal" id="loginModal">
     <div class="modal-content glass-card">
-      <span class="close-btn" id="closeAdminBtn">&times;</span>
-      <h3><i class="fa-solid fa-lock"></i> Add Memory (Admin)</h3>
-      <form id="memoryForm" enctype="multipart/form-data">
-        
+      <span class="close-btn" id="closeLoginBtn">&times;</span>
+      <h3><i class="fa-solid fa-lock"></i> Admin Login</h3>
+      <p class="modal-note">Para sa owner lang. Mag-login para makapag-add, edit, at delete ng memories.</p>
+      <form id="loginForm">
         <div class="input-group">
           <label>Admin Password</label>
-          <input type="password" id="password" name="password" placeholder="Enter Password" required>
+          <input type="password" id="loginPassword" placeholder="Enter Password" required autocomplete="off">
         </div>
+        <button type="submit" class="btn-submit"><i class="fa-solid fa-unlock"></i> Login</button>
+        <p class="status-msg" id="loginError"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add / Edit Memory Modal -->
+  <div class="modal" id="memoryModal">
+    <div class="modal-content glass-card">
+      <span class="close-btn" id="closeMemoryBtn">&times;</span>
+      <h3 id="memoryModalTitle"><i class="fa-solid fa-plus"></i> Add New Memory</h3>
+      <form id="memoryForm" enctype="multipart/form-data">
+
+        <input type="hidden" id="editMemoryId" value="">
 
         <div class="input-group">
           <label>Date</label>
@@ -87,32 +110,40 @@
         </div>
 
         <div class="input-group">
-          <label>Media Type</label>
-          <select id="type" name="type">
-            <option value="image">Photo</option>
-            <option value="video">Video</option>
-            <option value="audio">Audio</option>
-          </select>
+          <label>Upload Photos, Videos, Music <small>(pwedeng sabay-sabay, hanggang 20 files / 200MB each)</small></label>
+          <input type="file" id="media" name="media" accept="image/*,video/*,audio/*" multiple>
         </div>
 
         <div class="input-group">
-          <label>Upload File</label>
-          <input type="file" id="media" name="media" accept="image/*,video/*,audio/*">
+          <label>Video Links <small>(Google Drive o YouTube &mdash; isa kada linya)</small></label>
+          <textarea id="links" name="links" rows="2" placeholder="https://drive.google.com/file/d/...&#10;https://www.youtube.com/watch?v=..."></textarea>
         </div>
 
-        <div class="input-group">
-          <label>Or External Video Link (YouTube Embed)</label>
-          <input type="url" id="videoLink" name="videoLink" placeholder="https://www.youtube.com/embed/...">
+        <div class="input-group" id="existingMediaGroup" style="display:none;">
+          <label>Current Media <small>(i-click ang X para burahin)</small></label>
+          <div class="existing-media-list" id="existingMediaList"></div>
         </div>
 
-        <button type="submit" class="btn-submit">Save Memory</button>
+        <button type="submit" class="btn-submit" id="submitBtn"><i class="fa-solid fa-paper-plane"></i> Save Memory</button>
         <p class="status-msg" id="statusMsg"></p>
       </form>
     </div>
   </div>
 
+  <!-- Lightbox Viewer (same-tab media viewer) -->
+  <div class="lightbox" id="lightbox">
+    <span class="lightbox-close" id="closeLightboxBtn">&times;</span>
+    <button class="lightbox-nav lightbox-prev" id="lightboxPrev"><i class="fa-solid fa-chevron-left"></i></button>
+    <div class="lightbox-stage" id="lightboxStage"></div>
+    <button class="lightbox-nav lightbox-next" id="lightboxNext"><i class="fa-solid fa-chevron-right"></i></button>
+    <div class="lightbox-footer">
+      <div class="lightbox-dots" id="lightboxDots"></div>
+      <div class="lightbox-counter" id="lightboxCounter"></div>
+    </div>
+  </div>
+
   <footer>
-    <p>Made with ❤️ by Jay for Justhel Kate Malaubang</p>
+    <p>Made with <i class="fa-solid fa-heart"></i> by Jay for Justhel Kate Malaubang &bull; Dec 29, 2017 &ndash; Forever</p>
   </footer>
 
   <script src="script.js"></script>

@@ -1,150 +1,570 @@
 document.addEventListener('DOMContentLoaded', () => {
-  // Start Date: Dec 29, 2017
-  const startDate = new Date('2017-12-29T00:00:00');
+  'use strict';
 
-  // Real-Time Live Counter Function
-  function updateLiveCounter() {
-    const now = new Date();
-    const diff = now - startDate;
+  // ---------- Relationship start date ----------
+  const START = new Date(2017, 11, 29, 0, 0, 0); // December 29, 2017
 
-    const secondsTotal = Math.floor(diff / 1000);
-    const minutesTotal = Math.floor(secondsTotal / 60);
-    const hoursTotal = Math.floor(minutesTotal / 60);
-    const daysTotal = Math.floor(hoursTotal / 24);
+  // ---------- State ----------
+  let isAdmin = false;
+  let memories = [];
+  let editingId = null;
+  let editKept = [];
+  const lightbox = { memory: null, index: 0, open: false };
 
-    const years = Math.floor(daysTotal / 365.25);
-    const remainingDays = Math.floor(daysTotal % 365.25);
-    const hours = hoursTotal % 24;
-    const minutes = minutesTotal % 60;
-    const seconds = secondsTotal % 60;
+  // ---------- Helpers ----------
+  function esc(str) {
+    return String(str == null ? '' : str).replace(/[&<>'"]/g,
+      tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+  }
+  const escAttr = esc;
 
-    document.getElementById('years').textContent = years;
-    document.getElementById('days').textContent = remainingDays;
-    document.getElementById('hours').textContent = hours;
-    document.getElementById('minutes').textContent = minutes;
-    document.getElementById('seconds').textContent = seconds;
+  function ordinal(n) {
+    const s = ['th', 'st', 'nd', 'rd'];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
   }
 
+  function formatDate(dateStr) {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return esc(dateStr);
+    return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
+  function toDriveEmbed(url) {
+    const m = url.match(/\/file\/d\/([\w-]+)/) || url.match(/[?&]id=([\w-]+)/);
+    return m ? `https://drive.google.com/file/d/${m[1]}/preview` : url;
+  }
+
+  function toYouTubeEmbed(url) {
+    const m = url.match(/[?&]v=([\w-]+)/) || url.match(/youtu\.be\/([\w-]+)/) ||
+              url.match(/\/shorts\/([\w-]+)/) || url.match(/\/embed\/([\w-]+)/);
+    return m ? `https://www.youtube.com/embed/${m[1]}` : url;
+  }
+
+  function embedSrc(item) {
+    if (item.provider === 'gdrive') return toDriveEmbed(item.src);
+    if (item.provider === 'youtube') return toYouTubeEmbed(item.src);
+    return item.src;
+  }
+
+  function hasProviderIcon(item) {
+    return item.provider === 'gdrive' || item.provider === 'youtube';
+  }
+
+  // ---------- Realtime Timer ----------
+  const $years = document.getElementById('years');
+  const $months = document.getElementById('months');
+  const $days = document.getElementById('days');
+  const $hours = document.getElementById('hours');
+  const $minutes = document.getElementById('minutes');
+  const $seconds = document.getElementById('seconds');
+  const $liveDate = document.getElementById('liveDate');
+  const $heroTitle = document.getElementById('heroTitle');
+
+  function calendarDiff(from, to) {
+    let years = to.getFullYear() - from.getFullYear();
+    let months = to.getMonth() - from.getMonth();
+    let days = to.getDate() - from.getDate();
+    let hours = to.getHours() - from.getHours();
+    let minutes = to.getMinutes() - from.getMinutes();
+    let seconds = to.getSeconds() - from.getSeconds();
+
+    if (seconds < 0) { seconds += 60; minutes--; }
+    if (minutes < 0) { minutes += 60; hours--; }
+    if (hours < 0) { hours += 24; days--; }
+    if (days < 0) {
+      const prevMonthDays = new Date(to.getFullYear(), to.getMonth(), 0).getDate();
+      days += prevMonthDays;
+      months--;
+    }
+    if (months < 0) { months += 12; years--; }
+    return { years, months, days, hours, minutes, seconds };
+  }
+
+  let lastYears = null;
+
+  function heartBurst() {
+    const bg = document.getElementById('heartsBg');
+    for (let i = 0; i < 16; i++) {
+      const h = document.createElement('div');
+      h.className = 'burst-heart';
+      h.textContent = '\u2764';
+      h.style.left = Math.random() * 100 + '%';
+      h.style.animationDelay = Math.random() * 1.2 + 's';
+      h.style.fontSize = (14 + Math.random() * 22) + 'px';
+      h.style.color = Math.random() > 0.5 ? '#ff4b72' : '#70d6ff';
+      bg.appendChild(h);
+      setTimeout(() => h.remove(), 4000);
+    }
+  }
+
+  function updateHeroTitle(years) {
+    $heroTitle.textContent = `Happy ${ordinal(years)} Anniversary!`;
+    document.title = `Our Journey | ${years} Years Together`;
+  }
+
+  function updateLiveCounter() {
+    const now = new Date();
+    const d = calendarDiff(START, now);
+    $years.textContent = d.years;
+    $months.textContent = d.months;
+    $days.textContent = d.days;
+    $hours.textContent = String(d.hours).padStart(2, '0');
+    $minutes.textContent = String(d.minutes).padStart(2, '0');
+    $seconds.textContent = String(d.seconds).padStart(2, '0');
+
+    $liveDate.textContent = now.toLocaleString('en-PH', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      hour: 'numeric', minute: '2-digit', second: '2-digit'
+    });
+
+    if (lastYears !== null && d.years !== lastYears) {
+      updateHeroTitle(d.years);
+      heartBurst();
+    }
+    lastYears = d.years;
+  }
+
+  updateHeroTitle(calendarDiff(START, new Date()).years);
   setInterval(updateLiveCounter, 1000);
   updateLiveCounter();
 
-  // Background Audio Control
+  // ---------- Background Music ----------
   const bgMusic = document.getElementById('bgMusic');
   const musicBtn = document.getElementById('musicBtn');
   const musicText = document.getElementById('musicText');
   let isPlaying = false;
+
+  bgMusic.addEventListener('canplaythrough', () => { musicBtn.style.display = ''; }, { once: true });
+  bgMusic.addEventListener('error', () => { musicBtn.style.display = 'none'; }, { once: true });
+  bgMusic.load();
 
   musicBtn.addEventListener('click', () => {
     if (isPlaying) {
       bgMusic.pause();
       musicText.textContent = 'Play Our Song';
     } else {
-      bgMusic.play().catch(e => console.log('Audio playback allowed after user interaction'));
+      bgMusic.play().catch(() => {});
       musicText.textContent = 'Pause Music';
     }
     isPlaying = !isPlaying;
   });
 
-  // Modal and Elements
+  // ---------- Elements ----------
   const timelineContainer = document.getElementById('timelineContainer');
   const openAdminBtn = document.getElementById('openAdminBtn');
-  const closeAdminBtn = document.getElementById('closeAdminBtn');
-  const adminModal = document.getElementById('adminModal');
-  const memoryForm = document.getElementById('memoryForm');
-  const statusMsg = document.getElementById('statusMsg');
+  const logoutBtn = document.getElementById('logoutBtn');
 
-  openAdminBtn.addEventListener('click', () => adminModal.style.display = 'flex');
-  closeAdminBtn.addEventListener('click', () => adminModal.style.display = 'none');
-  window.addEventListener('click', (e) => {
-    if (e.target === adminModal) adminModal.style.display = 'none';
+  const loginModal = document.getElementById('loginModal');
+  const loginForm = document.getElementById('loginForm');
+  const loginPassword = document.getElementById('loginPassword');
+  const loginError = document.getElementById('loginError');
+  const closeLoginBtn = document.getElementById('closeLoginBtn');
+
+  const memoryModal = document.getElementById('memoryModal');
+  const memoryModalTitle = document.getElementById('memoryModalTitle');
+  const memoryForm = document.getElementById('memoryForm');
+  const editMemoryId = document.getElementById('editMemoryId');
+  const statusMsg = document.getElementById('statusMsg');
+  const closeMemoryBtn = document.getElementById('closeMemoryBtn');
+  const existingMediaGroup = document.getElementById('existingMediaGroup');
+  const existingMediaList = document.getElementById('existingMediaList');
+  const submitBtn = document.getElementById('submitBtn');
+
+  const lightboxEl = document.getElementById('lightbox');
+  const lightboxStage = document.getElementById('lightboxStage');
+  const lightboxPrev = document.getElementById('lightboxPrev');
+  const lightboxNext = document.getElementById('lightboxNext');
+  const lightboxDots = document.getElementById('lightboxDots');
+  const lightboxCounter = document.getElementById('lightboxCounter');
+  const closeLightboxBtn = document.getElementById('closeLightboxBtn');
+
+  function showModal(el) { el.style.display = 'flex'; }
+  function hideModal(el) { el.style.display = 'none'; }
+
+  // ---------- Admin State ----------
+  async function fetchMe() {
+    try {
+      const res = await fetch('/api/me');
+      const data = await res.json();
+      setAdmin(!!data.admin);
+    } catch (e) {
+      setAdmin(false);
+    }
+  }
+
+  function setAdmin(admin) {
+    isAdmin = admin;
+    logoutBtn.style.display = admin ? '' : 'none';
+    if (admin) {
+      openAdminBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Add New Memory';
+    } else {
+      openAdminBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Add New Memory';
+    }
+    if (memories.length > 0) renderMemories();
+  }
+
+  openAdminBtn.addEventListener('click', () => {
+    if (isAdmin) {
+      openAddModal();
+    } else {
+      loginError.textContent = '';
+      showModal(loginModal);
+      loginPassword.focus();
+    }
   });
 
-  // Load Memories
+  logoutBtn.addEventListener('click', async () => {
+    await fetch('/api/logout', { method: 'POST' });
+    setAdmin(false);
+  });
+
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    loginError.style.color = '#ff4b72';
+    loginError.textContent = 'Checking password...';
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: loginPassword.value })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Login failed.');
+      loginPassword.value = '';
+      hideModal(loginModal);
+      setAdmin(true);
+      openAddModal();
+    } catch (err) {
+      loginError.textContent = err.message;
+    }
+  });
+
+  closeLoginBtn.addEventListener('click', () => hideModal(loginModal));
+  closeMemoryBtn.addEventListener('click', () => { hideModal(memoryModal); editingId = null; });
+
+  window.addEventListener('click', (e) => {
+    if (e.target === loginModal) hideModal(loginModal);
+    if (e.target === memoryModal) { hideModal(memoryModal); editingId = null; }
+    if (e.target === lightboxEl) closeLightbox();
+  });
+
+  // ---------- Load & Render Memories ----------
   async function loadMemories() {
     try {
       const res = await fetch('/api/memories');
-      const memories = await res.json();
-      
-      if (!memories || memories.length === 0) {
-        timelineContainer.innerHTML = '<p class="loading">No memories saved yet. Click "Add New Memory" to start!</p>';
-        return;
-      }
-
-      timelineContainer.innerHTML = memories.map(item => `
-        <div class="timeline-item">
-          <div class="timeline-date"><i class="fa-regular fa-calendar-alt"></i> ${formatDate(item.date)}</div>
-          <h3 class="timeline-title">${escapeHTML(item.title)}</h3>
-          ${item.text ? `<p class="timeline-text">${escapeHTML(item.text)}</p>` : ''}
-          ${renderMedia(item)}
-        </div>
-      `).join('');
+      memories = await res.json();
+      if (!Array.isArray(memories)) memories = [];
+      renderMemories();
     } catch (err) {
       timelineContainer.innerHTML = '<p class="loading">Error loading memories database.</p>';
     }
   }
 
-  function renderMedia(item) {
-    if (!item.mediaUrl) return '';
+  function renderMemories() {
+    if (memories.length === 0) {
+      timelineContainer.innerHTML = '<p class="loading">No memories saved yet. Click "Add New Memory" to start!</p>';
+      return;
+    }
 
+    timelineContainer.innerHTML = memories.map(item => {
+      const media = item.media || [];
+      const grid = renderMediaGrid(media);
+      const actions = isAdmin ? `
+        <div class="card-admin-actions">
+          <button class="btn-edit" data-edit="${item.id}"><i class="fa-solid fa-pen"></i> Edit</button>
+          <button class="btn-delete" data-delete="${item.id}"><i class="fa-solid fa-trash"></i> Delete</button>
+        </div>` : '';
+      return `
+        <div class="timeline-item">
+          <div class="timeline-date"><i class="fa-regular fa-calendar-alt"></i> ${formatDate(item.date)}</div>
+          <h3 class="timeline-title">${esc(item.title)}</h3>
+          ${item.text ? `<p class="timeline-text">${esc(item.text)}</p>` : ''}
+          ${grid}
+          ${actions}
+        </div>`;
+    }).join('');
+
+    // Staggered entrance animation
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in-view');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0 });
+    timelineContainer.querySelectorAll('.timeline-item').forEach(el => observer.observe(el));
+    // Safety net: never leave cards invisible (e.g. odd viewports, printing)
+    setTimeout(() => {
+      timelineContainer.querySelectorAll('.timeline-item:not(.in-view)').forEach(el => el.classList.add('in-view'));
+    }, 2500);
+  }
+
+  function renderMediaGrid(media) {
+    if (!media.length) return '';
+    const count = Math.min(media.length, 4);
+    const moreCount = media.length - 4;
+    const tiles = media.slice(0, 4).map((m, i) => {
+      const tile = renderMediaTile(m, i);
+      const badge = (i === 3 && moreCount > 0) ? `<div class="more-badge">+${moreCount}</div>` : '';
+      return `<div class="tile-wrap" data-open="${i}">${tile}${badge}</div>`;
+    }).join('');
+    return `<div class="media-grid grid-${count}">${tiles}</div>`;
+  }
+
+  function renderMediaTile(item, idx) {
     if (item.type === 'image') {
-      return `<img src="${item.mediaUrl}" class="timeline-media" alt="${escapeHTML(item.title)}" loading="lazy">`;
-    } else if (item.type === 'video') {
-      if (item.mediaUrl.startsWith('http')) {
-        return `<iframe class="timeline-media" height="280" src="${item.mediaUrl}" frameborder="0" allowfullscreen></iframe>`;
+      return `<img class="tile-img" src="${escAttr(item.src)}" alt="memory photo" loading="lazy">`;
+    }
+    if (item.type === 'video') {
+      if (hasProviderIcon(item)) {
+        const icon = item.provider === 'gdrive' ? 'fa-google-drive' : 'fa-youtube';
+        return `<div class="tile-link-card"><i class="fa-brands ${icon}"></i><span>Watch Video</span></div>`;
       }
-      return `<video src="${item.mediaUrl}" class="timeline-media" controls></video>`;
-    } else if (item.type === 'audio') {
-      return `<audio src="${item.mediaUrl}" controls style="width:100%; margin-top:10px;"></audio>`;
+      return `<video class="tile-img" src="${escAttr(item.src)}" muted playsinline preload="metadata"></video>
+              <div class="play-badge"><i class="fa-solid fa-play"></i></div>`;
+    }
+    if (item.type === 'audio') {
+      const name = item.name || item.src.split('/').pop();
+      return `<div class="tile-link-card tile-audio"><i class="fa-solid fa-compact-disc"></i><span class="audio-name">${esc(name)}</span><i class="fa-solid fa-circle-play"></i></div>`;
     }
     return '';
   }
 
-  // Submit Memory Form
-  memoryForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    statusMsg.style.color = '#70d6ff';
-    statusMsg.textContent = 'Saving memory...';
-
-    const formData = new FormData(memoryForm);
-
-    try {
-      const response = await fetch('/api/memories', {
-        method: 'POST',
-        body: formData
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Server error occurred.');
+  // Card-level clicks (lightbox open, edit, delete)
+  timelineContainer.addEventListener('click', (e) => {
+    const editBtn = e.target.closest('[data-edit]');
+    if (editBtn) {
+      openEditModal(Number(editBtn.dataset.edit));
+      return;
+    }
+    const deleteBtn = e.target.closest('[data-delete]');
+    if (deleteBtn) {
+      doDelete(Number(deleteBtn.dataset.delete));
+      return;
+    }
+    const openTile = e.target.closest('[data-open]');
+    if (openTile) {
+      const memEl = openTile.closest('.timeline-item');
+      const cardIndex = Array.from(timelineContainer.querySelectorAll('.timeline-item')).indexOf(memEl);
+      const memory = memories[cardIndex];
+      if (memory && memory.media && memory.media.length) {
+        openLightbox(memory, Number(openTile.dataset.open));
       }
-
-      statusMsg.style.color = '#38ef7d';
-      statusMsg.textContent = 'Memory saved successfully!';
-      memoryForm.reset();
-      
-      setTimeout(() => {
-        adminModal.style.display = 'none';
-        statusMsg.textContent = '';
-        loadMemories();
-      }, 1000);
-
-    } catch (err) {
-      statusMsg.style.color = '#ff4b72';
-      statusMsg.textContent = err.message;
     }
   });
 
-  function formatDate(dateStr) {
-    const options = { year: 'numeric', month: 'long', day: 'numeric' };
-    return new Date(dateStr).toLocaleDateString('fil-PH', options);
+  async function doDelete(id) {
+    if (!confirm('Sigurado ka bang buburahin ang memory na ito? Hindi na ito maibabalik.')) return;
+    try {
+      const res = await fetch(`/api/memories/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Delete failed.');
+      loadMemories();
+    } catch (err) {
+      alert(err.message);
+    }
   }
 
-  function escapeHTML(str) {
-    return str.replace(/[&<>'"]/g, 
-      tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
-    );
+  // ---------- Add / Edit Modal ----------
+  function resetMediaForm() {
+    memoryForm.reset();
+    editingId = null;
+    editKept = [];
+    editMemoryId.value = '';
+    existingMediaGroup.style.display = 'none';
+    existingMediaList.innerHTML = '';
+    memoryModalTitle.innerHTML = '<i class="fa-solid fa-plus"></i> Add New Memory';
+    statusMsg.textContent = '';
+    submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Save Memory';
   }
 
+  function openAddModal() {
+    resetMediaForm();
+    // default date = today
+    const today = new Date();
+    document.getElementById('date').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    showModal(memoryModal);
+  }
+
+  function openEditModal(id) {
+    const memory = memories.find(m => m.id === id);
+    if (!memory) return;
+    resetMediaForm();
+    editingId = id;
+    editMemoryId.value = id;
+
+    const d = new Date(memory.date);
+    if (!isNaN(d.getTime())) {
+      document.getElementById('date').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+    document.getElementById('title').value = memory.title || '';
+    document.getElementById('text').value = memory.text || '';
+
+    editKept = (memory.media || []).map(m => ({ ...m }));
+    renderExistingMedia();
+
+    memoryModalTitle.innerHTML = '<i class="fa-solid fa-pen"></i> Edit Memory';
+    submitBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Update Memory';
+    showModal(memoryModal);
+  }
+
+  function renderExistingMedia() {
+    if (editingId === null) return;
+    existingMediaGroup.style.display = editKept.length ? '' : 'none';
+    existingMediaList.innerHTML = editKept.map((m, i) => {
+      let preview;
+      if (m.type === 'image') {
+        preview = `<img src="${escAttr(m.src)}" alt="">`;
+      } else if (m.type === 'audio') {
+        preview = `<div class="mini-icon"><i class="fa-solid fa-music"></i></div>`;
+      } else {
+        const icon = m.provider === 'gdrive' ? 'fa-google-drive' : (m.provider === 'youtube' ? 'fa-youtube' : 'fa-film');
+        preview = `<div class="mini-icon"><i class="fa-brands ${icon}"></i></div>`;
+      }
+      const label = m.type === 'video' && hasProviderIcon(m) ? (m.provider === 'gdrive' ? 'Drive Video' : 'YouTube') : (m.name || m.src.split('/').pop());
+      return `<div class="existing-media-item" data-idx="${i}">
+        ${preview}<span class="existing-name">${esc(label)}</span>
+        <button type="button" class="remove-media-btn" data-remove="${i}" title="Remove">&times;</button>
+      </div>`;
+    }).join('');
+  }
+
+  existingMediaList.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-remove]');
+    if (!btn) return;
+    editKept.splice(Number(btn.dataset.remove), 1);
+    renderExistingMedia();
+  });
+
+  memoryForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    statusMsg.style.color = '#70d6ff';
+    statusMsg.textContent = editingId ? 'Updating memory...' : 'Saving memory...';
+    submitBtn.disabled = true;
+
+    const formData = new FormData();
+    formData.append('date', document.getElementById('date').value);
+    formData.append('title', document.getElementById('title').value);
+    formData.append('text', document.getElementById('text').value);
+    formData.append('links', document.getElementById('links').value);
+
+    const filesInput = document.getElementById('media');
+    for (const f of filesInput.files) formData.append('media', f);
+
+    let url = '/api/memories';
+    let method = 'POST';
+    if (editingId) {
+      url = `/api/memories/${editingId}`;
+      method = 'PUT';
+      formData.append('keepMedia', JSON.stringify(editKept.map(m => m.src)));
+    }
+
+    try {
+      const response = await fetch(url, { method, body: formData });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Server error occurred.');
+
+      statusMsg.style.color = '#38ef7d';
+      statusMsg.textContent = editingId ? 'Memory updated!' : 'Memory saved successfully!';
+
+      setTimeout(() => {
+        hideModal(memoryModal);
+        editingId = null;
+        loadMemories();
+      }, 800);
+    } catch (err) {
+      statusMsg.style.color = '#ff4b72';
+      statusMsg.textContent = err.message;
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  // ---------- Lightbox (same-tab viewer) ----------
+  function openLightbox(memory, index) {
+    lightbox.memory = memory;
+    lightbox.index = index || 0;
+    lightbox.open = true;
+    buildDots();
+    renderLightboxItem();
+    lightboxEl.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeLightbox() {
+    lightbox.open = false;
+    lightboxEl.classList.remove('active');
+    lightboxStage.innerHTML = '';
+    document.body.style.overflow = '';
+  }
+
+  function buildDots() {
+    const items = lightbox.memory.media || [];
+    lightboxDots.innerHTML = items.map((m, i) =>
+      `<button class="dot" data-dot="${i}"></button>`).join('');
+    lightboxDots.querySelectorAll('[data-dot]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        lightbox.index = Number(btn.dataset.dot);
+        renderLightboxItem();
+      });
+    });
+  }
+
+  function renderLightboxItem() {
+    const items = lightbox.memory.media || [];
+    if (!items.length) return;
+    lightbox.index = (lightbox.index + items.length) % items.length;
+    const item = items[lightbox.index];
+
+    if (item.type === 'image') {
+      lightboxStage.innerHTML = `<img src="${escAttr(item.src)}" alt="memory">`;
+    } else if (item.type === 'video') {
+      if (hasProviderIcon(item)) {
+        lightboxStage.innerHTML = `<iframe src="${escAttr(embedSrc(item))}" allow="autoplay; fullscreen" allowfullscreen frameborder="0"></iframe>`;
+      } else {
+        lightboxStage.innerHTML = `<video src="${escAttr(item.src)}" controls autoplay playsinline></video>`;
+      }
+    } else if (item.type === 'audio') {
+      const name = item.name || item.src.split('/').pop();
+      lightboxStage.innerHTML = `
+        <div class="lightbox-audio">
+          <i class="fa-solid fa-compact-disc disc-spin"></i>
+          <div class="audio-title">${esc(name)}</div>
+          <audio src="${escAttr(item.src)}" controls autoplay></audio>
+        </div>`;
+    }
+
+    lightboxCounter.textContent = `${lightbox.index + 1} / ${items.length}`;
+    lightboxDots.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i === lightbox.index));
+  }
+
+  lightboxPrev.addEventListener('click', () => { lightbox.index--; renderLightboxItem(); });
+  lightboxNext.addEventListener('click', () => { lightbox.index++; renderLightboxItem(); });
+  closeLightboxBtn.addEventListener('click', closeLightbox);
+
+  document.addEventListener('keydown', (e) => {
+    if (!lightbox.open) return;
+    if (e.key === 'Escape') closeLightbox();
+    if (e.key === 'ArrowRight') { lightbox.index++; renderLightboxItem(); }
+    if (e.key === 'ArrowLeft') { lightbox.index--; renderLightboxItem(); }
+  });
+
+  // Swipe support (mobile)
+  let touchStartX = 0;
+  lightboxEl.addEventListener('touchstart', (e) => {
+    touchStartX = e.changedTouches[0].clientX;
+  }, { passive: true });
+  lightboxEl.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(dx) > 50) {
+      lightbox.index += dx < 0 ? 1 : -1;
+      renderLightboxItem();
+    }
+  }, { passive: true });
+
+  // ---------- Init ----------
+  fetchMe();
   loadMemories();
 });
