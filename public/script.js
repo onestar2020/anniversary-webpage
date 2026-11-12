@@ -332,6 +332,49 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!playlist.length) musicBtn.style.display = 'none';
   });
 
+  // ---------- Envelope intro ----------
+  (function initEnvelopeIntro() {
+    const intro = document.getElementById('envelopeIntro');
+    const box = document.getElementById('envelopeBox');
+    if (!intro || !box) return;
+    document.body.classList.add('intro-open');
+    let opened = false;
+    const reveal = () => {
+      if (opened) return;
+      opened = true;
+      // Ang click na ito ang user gesture — dito sinisimulan ang tunog para
+      // siguradong may music habang bumubukas ang liham (importante sa iOS).
+      ensureWebAudio();
+      if (autoMuted) {
+        autoMuted = false;
+        bgMusic.muted = false;
+        // Safety net: kung pending pa ang naunang play() (na-interrupt/blocked),
+        // mag-play ulit dito sa gesture para siguradong tutugtog.
+        if (bgMusic.paused && bgMusic.currentSrc) {
+          bgMusic.play().then(setMusicLabel).catch(() => {});
+        } else {
+          setMusicLabel();
+        }
+      } else if (userWantsMusic && !pausedForMedia && bgMusic.paused && bgMusic.currentSrc) {
+        bgMusic.play().then(setMusicLabel).catch(() => {});
+      }
+      box.classList.add('open');
+      setTimeout(() => intro.classList.add('intro-done'), 2300);
+      setTimeout(() => {
+        intro.remove();
+        document.body.classList.remove('intro-open');
+      }, 3300);
+    };
+    box.addEventListener('click', reveal);
+    const onKey = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        document.removeEventListener('keydown', onKey);
+        reveal();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+  })();
+
   (async function initMusic() {
     try {
       const res = await fetch('/api/bg-music');
