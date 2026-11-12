@@ -375,8 +375,8 @@ export default {
         date ? `Date of the memory: ${date}.` : '',
         img ? 'A photo from that memory is attached - base the story on what you see in it.' : 'There is no photo for this memory.'
       ].filter(Boolean).join(' ');
-      const style = 'Write ONE short sweet Taglish story (2-3 sentences max), warm and romantic, "kami/tayo" vibe, like a handwritten scrapbook line. Use natural conversational Taglish (Tagalog with light English words). Reply with the story text only - no quotes, no explanation, no emojis.';
-      const sys = 'You write tiny romantic captions for a Filipino couple\'s memory timeline website.';
+      const style = 'Write ONE short love quote or mini love story in ENGLISH (1-3 sentences) - poetic, profound, warm and timeless, like a quote printed on a beautiful card. Style example: "Being deeply loved by someone gives you strength, while loving someone deeply gives you courage." Make it about our love, optionally inspired by the photo, title or date. Reply with the text only - no quotation marks around the whole thing, no explanation, no emojis.';
+      const sys = 'You write romantic quote-card lines for a couple\'s memory timeline website.';
       const messages = [{
         role: 'user',
         content: img ? [
