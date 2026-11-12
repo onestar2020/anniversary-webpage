@@ -332,6 +332,77 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!playlist.length) musicBtn.style.display = 'none';
   });
 
+  // ---------- Kilig gate: "Kailan mo ako sinagot?" ----------
+  (function initGate() {
+    const gate = document.getElementById('gateOverlay');
+    if (!gate) return;
+    const card = document.getElementById('gateCard');
+    const monthSel = document.getElementById('gateMonth');
+    const daySel = document.getElementById('gateDay');
+    const yearSel = document.getElementById('gateYear');
+    const btn = document.getElementById('gateBtn');
+    const msg = document.getElementById('gateMsg');
+    const KEY = 'annivGateOk';
+
+    // Nakasagot na dati: alisin agad ang gate bago pa unang maipinta
+    let unlocked = false;
+    try { unlocked = localStorage.getItem(KEY) === '1'; } catch (e) {}
+    if (unlocked) { gate.remove(); return; }
+
+    const MONTHS = ['Enero', 'Pebrero', 'Marso', 'Abril', 'Mayo', 'Hunyo', 'Hulyo', 'Agosto', 'Setyembre', 'Oktubre', 'Nobyembre', 'Disyembre'];
+    const mkOption = (val, text) => { const o = document.createElement('option'); o.value = val; o.textContent = text; return o; };
+    monthSel.appendChild(mkOption('', 'Buwan'));
+    MONTHS.forEach((m, i) => monthSel.appendChild(mkOption(i + 1, m)));
+    daySel.appendChild(mkOption('', 'Araw'));
+    for (let d = 1; d <= 31; d++) daySel.appendChild(mkOption(d, d));
+    yearSel.appendChild(mkOption('', 'Taon'));
+    for (let y = 2015; y <= 2021; y++) yearSel.appendChild(mkOption(y, y));
+
+    let wrongCount = 0;
+    btn.addEventListener('click', () => {
+      const m = monthSel.value, d = daySel.value, y = yearSel.value;
+      if (!m || !d || !y) {
+        msg.textContent = 'Piliin mo muna ang buwan, araw, at taon 😊';
+        return;
+      }
+      if (m === '12' && d === '29' && y === '2017') {
+        msg.textContent = '';
+        burstHearts();
+        try { localStorage.setItem(KEY, '1'); } catch (e) {}
+        setTimeout(() => {
+          gate.classList.add('gate-pass');
+          setTimeout(() => gate.remove(), 850);
+        }, 450);
+      } else {
+        wrongCount++;
+        card.classList.remove('shake');
+        void card.offsetWidth;
+        card.classList.add('shake');
+        msg.textContent = 'Hmm... subukan muli 😘' + (wrongCount >= 3 ? '\nClue: malapit sa Pasko 🎄' : '');
+      }
+    });
+
+    function burstHearts() {
+      const r = card.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      for (let i = 0; i < 14; i++) {
+        const s = document.createElement('i');
+        s.className = 'fa-solid fa-heart gate-burst-heart';
+        const ang = Math.random() * Math.PI * 2;
+        const dist = 90 + Math.random() * 140;
+        s.style.left = cx + 'px';
+        s.style.top = cy + 'px';
+        s.style.setProperty('--dx', Math.round(Math.cos(ang) * dist) + 'px');
+        s.style.setProperty('--dy', Math.round(Math.sin(ang) * dist - 70) + 'px');
+        s.style.animationDelay = (Math.random() * 0.15) + 's';
+        s.style.fontSize = Math.round(14 + Math.random() * 18) + 'px';
+        document.body.appendChild(s);
+        setTimeout(() => s.remove(), 1500);
+      }
+    }
+  })();
+
   // ---------- Envelope intro ----------
   (function initEnvelopeIntro() {
     const intro = document.getElementById('envelopeIntro');
@@ -379,6 +450,7 @@ document.addEventListener('DOMContentLoaded', () => {
     box.addEventListener('click', reveal);
     const onKey = (e) => {
       if (e.key !== 'Enter' && e.key !== ' ') return;
+      if (document.getElementById('gateOverlay')) return;
       if (!opened) reveal();
       else finish();
     };

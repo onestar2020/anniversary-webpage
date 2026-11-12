@@ -10,6 +10,26 @@
 </head>
 <body>
 
+  <!-- Kilig gate: tanong muna bago ang sorpresa -->
+  <div class="gate-overlay" id="gateOverlay">
+    <div class="intro-hearts">
+      <i class="fa-solid fa-heart"></i><i class="fa-solid fa-heart"></i><i class="fa-solid fa-heart"></i>
+      <i class="fa-solid fa-heart"></i><i class="fa-solid fa-heart"></i><i class="fa-solid fa-heart"></i>
+    </div>
+    <div class="gate-card" id="gateCard">
+      <p class="gate-question">Kailan mo ako sinagot? 💌</p>
+      <p class="gate-sub">May tanong muna bago ang sorpresa...</p>
+      <div class="gate-selects">
+        <select id="gateMonth" aria-label="Buwan"></select>
+        <select id="gateDay" aria-label="Araw"></select>
+        <select id="gateYear" aria-label="Taon"></select>
+      </div>
+      <button type="button" class="gate-btn" id="gateBtn"><i class="fa-solid fa-heart"></i> Sagot</button>
+      <p class="gate-msg" id="gateMsg" role="alert"></p>
+    </div>
+    <p class="gate-footer">— para sa'yo lang ito, Mamang —</p>
+  </div>
+
   <!-- Envelope Intro (love letter overlay) -->
   <div class="envelope-intro" id="envelopeIntro">
     <div class="intro-hearts">

@@ -1250,4 +1250,152 @@ body.intro-open {
   .envelope.open .letter-card {
     transform: translateY(-14%) scale(1.28);
   }
+
+  .gate-card {
+    padding: 28px 20px 22px;
+  }
+
+  .gate-selects select {
+    min-width: 88px;
+    padding: 10px 8px;
+  }
+}
+
+/* ---------- Kilig gate (tanong bago ang envelope) ---------- */
+.gate-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 6000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  background: linear-gradient(140deg, #ffeef2 0%, #ffdbe4 55%, #ffc9d8 100%);
+  overflow: hidden;
+  transition: opacity 0.8s ease;
+}
+
+.gate-overlay.gate-pass {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.gate-card {
+  background: rgba(255, 249, 251, 0.94);
+  border-radius: 22px;
+  padding: 34px 30px 26px;
+  text-align: center;
+  box-shadow: 0 24px 50px rgba(214, 80, 110, 0.35);
+  max-width: min(88vw, 420px);
+  animation: introFadeUp 1s ease both;
+  z-index: 1;
+}
+
+.gate-card.shake {
+  animation: gateShake 0.5s ease;
+}
+
+@keyframes gateShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-12px) rotate(-1.5deg); }
+  40% { transform: translateX(10px) rotate(1.5deg); }
+  60% { transform: translateX(-8px); }
+  80% { transform: translateX(6px); }
+}
+
+.gate-question {
+  font-family: 'Dancing Script', cursive;
+  font-weight: 700;
+  font-size: clamp(1.6rem, 5vw, 2.2rem);
+  color: #b23a56;
+  line-height: 1.15;
+}
+
+.gate-sub {
+  font-size: clamp(0.8rem, 2.4vw, 0.9rem);
+  color: #9c4a63;
+  margin-top: 6px;
+}
+
+.gate-selects {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin: 20px 0 4px;
+  flex-wrap: wrap;
+}
+
+.gate-selects select {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #b23a56;
+  background: #fff;
+  border: 2px solid #f3a9bd;
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  outline: none;
+  min-width: 96px;
+}
+
+.gate-selects select:focus {
+  border-color: #ff4b72;
+  box-shadow: 0 0 0 3px rgba(255, 75, 114, 0.18);
+}
+
+.gate-btn {
+  margin-top: 18px;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: 1px;
+  color: #fff;
+  background: linear-gradient(45deg, #ff4b72, #f0617f);
+  border: none;
+  border-radius: 999px;
+  padding: 13px 40px;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(214, 50, 90, 0.45);
+  transition: transform 0.15s ease;
+}
+
+.gate-btn:hover {
+  transform: scale(1.05);
+}
+
+.gate-btn:active {
+  transform: scale(0.97);
+}
+
+.gate-msg {
+  min-height: 1.4em;
+  margin-top: 14px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #e0557a;
+  white-space: pre-line;
+}
+
+.gate-footer {
+  font-family: 'Dancing Script', cursive;
+  font-size: clamp(1rem, 3vw, 1.3rem);
+  color: #c4758c;
+  animation: introFadeUp 1s ease 0.3s both;
+  z-index: 1;
+}
+
+.gate-burst-heart {
+  position: fixed;
+  z-index: 6500;
+  color: #ff4b72;
+  pointer-events: none;
+  animation: gateBurst 1.2s ease-out both;
+}
+
+@keyframes gateBurst {
+  0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.15); opacity: 0; }
 }
