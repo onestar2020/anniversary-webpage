@@ -775,6 +775,56 @@ document.addEventListener('DOMContentLoaded', () => {
     renderExistingMedia();
   });
 
+  const storyAiBtn = document.getElementById('storyAiBtn');
+
+  async function fileToSmallJpeg(file, maxDim = 1024) {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+    return dataUrl.slice(dataUrl.indexOf(',') + 1);
+  }
+
+  storyAiBtn.addEventListener('click', async () => {
+    const textEl = document.getElementById('text');
+    if (textEl.value.trim() && !confirm('Papalitan ang story na nakasulat. Tuloy?')) return;
+    const oldLabel = storyAiBtn.textContent;
+    storyAiBtn.disabled = true;
+    storyAiBtn.textContent = '✨ Nag-iisip...';
+    statusMsg.style.color = '#70d6ff';
+    statusMsg.textContent = 'Ginagawa ang sweet story...';
+    try {
+      let image = null;
+      const photo = Array.from(document.getElementById('media').files)
+        .find(f => (f.type || '').startsWith('image/'));
+      if (photo) {
+        try { image = await fileToSmallJpeg(photo); } catch (e) { image = null; }
+      }
+      const res = await fetch('/api/story-suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: document.getElementById('title').value,
+          date: document.getElementById('date').value,
+          image
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) throw new Error((data && data.error) || 'Hindi nagawa ang story. Subukan ulit.');
+      textEl.value = data.story;
+      statusMsg.textContent = '';
+    } catch (err) {
+      statusMsg.style.color = '#ff4b72';
+      statusMsg.textContent = err.message;
+    } finally {
+      storyAiBtn.disabled = false;
+      storyAiBtn.textContent = oldLabel;
+    }
+  });
+
   memoryForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     statusMsg.style.color = '#70d6ff';

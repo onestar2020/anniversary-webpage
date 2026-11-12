@@ -8,5 +8,6 @@
   },
   "kv_namespaces": [
     { "binding": "KV", "id": "8a5fc82b8a2a4f70aeb3ecaecb92db40" }
-  ]
+  ],
+  "ai": { "binding": "AI" }
 }

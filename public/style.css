@@ -795,6 +795,30 @@ body {
   font-size: 0.75rem;
 }
 
+.btn-story-ai {
+  background: linear-gradient(45deg, var(--pink-primary), var(--skyblue-primary));
+  color: #fff;
+  border: none;
+  padding: 3px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 600;
+  margin-left: 8px;
+  vertical-align: middle;
+  transition: transform 0.2s ease;
+}
+
+.btn-story-ai:hover {
+  transform: scale(1.06);
+}
+
+.btn-story-ai:disabled {
+  opacity: 0.6;
+  cursor: wait;
+  transform: none;
+}
+
 .input-group input,
 .input-group textarea,
 .input-group select {

@@ -358,6 +358,68 @@ export default {
       return new Response(upstream.body, { status: 200, headers });
     }
 
+    // ---------- AI story suggest ----------
+    if (path === '/api/story-suggest') {
+      if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+      if (!(await isAdmin(request, env))) {
+        return json({ error: 'Kailangan mag-login bilang admin.' }, 401);
+      }
+      if (!env.AI) return json({ error: 'Hindi available ang AI binding.' }, 500);
+      const body = await request.json().catch(() => ({}));
+      const title = String(body.title || '').slice(0, 120);
+      const date = String(body.date || '').slice(0, 40);
+      const img = typeof body.image === 'string' ? body.image : '';
+      if (img.length > 7000000) return json({ error: 'Masyadong malaki ang picture.' }, 400);
+      const meta = [
+        title ? `Memory title: "${title}".` : 'The memory has no title.',
+        date ? `Date of the memory: ${date}.` : '',
+        img ? 'A photo from that memory is attached - base the story on what you see in it.' : 'There is no photo for this memory.'
+      ].filter(Boolean).join(' ');
+      const style = 'Write ONE short sweet Taglish story (2-3 sentences max), warm and romantic, "kami/tayo" vibe, like a handwritten scrapbook line. Use natural conversational Taglish (Tagalog with light English words). Reply with the story text only - no quotes, no explanation, no emojis.';
+      const sys = 'You write tiny romantic captions for a Filipino couple\'s memory timeline website.';
+      const messages = [{
+        role: 'user',
+        content: img ? [
+          { type: 'text', text: `${sys} ${meta} ${style}` },
+          { type: 'image_url', image_url: 'data:image/jpeg;base64,' + img }
+        ] : `${sys} ${meta} ${style}`
+      }];
+      let story = '';
+      try {
+        const out = await env.AI.run('@cf/meta/llama-4-scout-17b-16e-instruct', { messages, max_tokens: 150, temperature: 0.9 });
+        story = out && out.response ? String(out.response).trim() : '';
+      } catch (e) { story = ''; }
+      if (!story) {
+        // Fallback kung hindi available ang scout: llava describes, llama 3.3 writes
+        let scene = '';
+        if (img) {
+          try {
+            const desc = await env.AI.run('@cf/llava-1.5-7b-hf', {
+              messages: [{ role: 'user', content: [
+                { type: 'text', text: 'Describe this photo in 1-2 short sentences: the setting, the people, the mood.' },
+                { type: 'image_url', image_url: 'data:image/jpeg;base64,' + img }
+              ] }]
+            });
+            scene = desc && desc.description ? String(desc.description).slice(0, 500) : '';
+          } catch (e) { scene = ''; }
+        }
+        const prompt = [
+          sys,
+          meta,
+          scene ? `The photo shows: ${scene}` : '',
+          style
+        ].filter(Boolean).join(' ');
+        try {
+          const out = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', { messages: [{ role: 'user', content: prompt }], max_tokens: 150, temperature: 0.9 });
+          story = out && out.response ? String(out.response).trim() : '';
+        } catch (err) {
+          return json({ error: 'AI error: ' + err.message }, 502);
+        }
+      }
+      if (!story) return json({ error: 'Walang naisip ang AI. Subukan ulit.' }, 502);
+      return json({ success: true, story });
+    }
+
     // ---------- Memories ----------
     if (path === '/api/memories') {
       if (request.method === 'GET') {
