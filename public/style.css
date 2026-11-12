@@ -1129,6 +1129,13 @@ body.intro-open {
   color: #9c4a63;
 }
 
+.letter-love {
+  font-family: 'Dancing Script', cursive;
+  font-weight: 700;
+  font-size: clamp(1.15rem, 3.6vw, 1.55rem);
+  color: #f0617f;
+}
+
 .letter-hint {
   font-size: clamp(0.7rem, 2.2vw, 0.85rem);
   color: #c48a9d;
