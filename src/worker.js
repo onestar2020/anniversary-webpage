@@ -102,12 +102,12 @@ function toBase64(buffer) {
 // Apps Script web apps don't parse multipart file parts from server-side
 // requests (e.parameters stays empty), so each file is sent as a JSON body
 // with base64 data read from e.postData.contents.
-async function uploadOneToDrive(env, file) {
+async function uploadOneToDrive(env, file, buf) {
   const payload = {
     key: env.DRIVE_SCRIPT_KEY,
     name: file.name,
     type: file.type || extType(file.name),
-    data: toBase64(await file.arrayBuffer())
+    data: toBase64(buf || (await file.arrayBuffer()))
   };
   let res;
   try {
@@ -158,6 +158,24 @@ function driveEntries(files, uploaded) {
     src: 'https://drive.google.com/file/d/' + u.id + '/view',
     name: files[i].name
   }));
+}
+
+// Fingerprint ng laman ng file — pantay kahit magkaiba ang filename,
+// kaya nahuhuli ang mga na-upload nang dati na kopya.
+async function sha256Hex(buffer) {
+  const digest = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function findDuplicateHash(memories, hash) {
+  for (const mem of memories) {
+    for (const m of mem.media || []) {
+      if (m.hash && m.hash === hash) {
+        return { memoryId: mem.id, title: mem.title, date: mem.date, name: m.name || '' };
+      }
+    }
+  }
+  return null;
 }
 
 export default {
@@ -420,6 +438,67 @@ export default {
       return json({ success: true, story });
     }
 
+    // Fingerprint index para sa duplicate detection sa form (admin only)
+    if (path === '/api/media-hashes') {
+      if (!(await isAdmin(request, env))) {
+        return json({ error: 'Kailangan mag-login bilang admin.' }, 401);
+      }
+      const memories = (await env.KV.get('memories', 'json')) || [];
+      const hashes = [];
+      for (const mem of memories) {
+        for (const m of mem.media || []) {
+          if (m.hash) hashes.push({ h: m.hash, t: mem.title, d: mem.date, id: mem.id, n: m.name || '' });
+        }
+      }
+      return json({ hashes });
+    }
+
+    // One-time backfill: kinukuha ang orihinal na bytes ng mga lumang gdrive
+    // media mula sa Drive para ma-hash. May budget bawat tawag ( CPU/network );
+    // ulitin hanggang done:true.
+    if (path === '/api/backfill-hashes' && request.method === 'POST') {
+      if (!(await isAdmin(request, env))) {
+        return json({ error: 'Kailangan mag-login bilang admin.' }, 401);
+      }
+      const BUDGET_BYTES = 50 * 1024 * 1024;
+      const memories = (await env.KV.get('memories', 'json')) || [];
+      let used = 0;
+      let processed = 0;
+      let remaining = 0;
+      let changed = false;
+      for (const mem of memories) {
+        for (const m of (mem.media || [])) {
+          if (m.hash || m.provider !== 'gdrive') continue;
+          remaining++;
+        }
+      }
+      for (const mem of memories) {
+        for (const m of (mem.media || [])) {
+          if (m.hash || m.provider !== 'gdrive') continue;
+          if (used >= BUDGET_BYTES) {
+            if (changed) await env.KV.put('memories', JSON.stringify(memories));
+            return json({ done: false, processed, remaining });
+          }
+          const fileId = (m.src.match(/\/file\/d\/([\w-]+)/) || m.src.match(/[?&]id=([\w-]+)/) || [])[1];
+          if (!fileId) { m.hash = 'unavailable:no-file-id'; changed = true; remaining--; continue; }
+          try {
+            const res = await fetch(`https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`);
+            if (!res.ok) { m.hash = 'unavailable:' + res.status; changed = true; remaining--; continue; }
+            const buf = await res.arrayBuffer();
+            m.hash = await sha256Hex(buf);
+            used += buf.byteLength;
+            processed++;
+            remaining--;
+            changed = true;
+          } catch (err) {
+            // iiwanang walang hash para masubukan ulit sa susunod na tawag
+          }
+        }
+      }
+      if (changed) await env.KV.put('memories', JSON.stringify(memories));
+      return json({ done: true, processed, remaining });
+    }
+
     // ---------- Memories ----------
     if (path === '/api/memories') {
       if (request.method === 'GET') {
@@ -445,18 +524,32 @@ export default {
           return json({ error: `Hindi suportadong link: ${invalid[0]}. Gumamit ng Google Drive, YouTube, o direktang image/audio file link.` }, 400);
         }
 
+        const memories = (await env.KV.get('memories', 'json')) || [];
+
         const { files, error: fileError } = collectValidFiles(form);
         if (fileError) return json({ error: fileError }, 400);
         let fileMedia = [];
         if (files.length) {
+          const hashes = [];
+          const seen = new Map();
+          for (const f of files) {
+            const h = await sha256Hex(await f.arrayBuffer());
+            const dup = findDuplicateHash(memories, h) ||
+              (seen.has(h) ? { memoryId: null, title: seen.get(h), date, name: f.name } : null);
+            if (dup) {
+              return json({ error: `Kopya na ang ${f.name} — nasa "${dup.title}"${dup.date ? ` (${dup.date})` : ''}. Walang na-upload.` }, 409);
+            }
+            seen.set(h, f.name);
+            hashes.push(h);
+          }
           try {
             fileMedia = driveEntries(files, await uploadFilesToDrive(env, files));
+            fileMedia.forEach((e, i) => { e.hash = hashes[i]; });
           } catch (err) {
             return json({ error: err.message }, 500);
           }
         }
 
-        const memories = (await env.KV.get('memories', 'json')) || [];
         const newMemory = {
           id: Date.now(),
           date,
@@ -493,13 +586,23 @@ export default {
       if (!['image/', 'video/', 'audio/'].some(t => (file.type || '').startsWith(t))) {
         return json({ error: 'Hindi suportadong file type. Images, videos, at music lang.' }, 400);
       }
+      const fileBuf = await file.arrayBuffer();
+      const hash = await sha256Hex(fileBuf);
+      const dup = findDuplicateHash(memories, hash);
+      if (dup) {
+        return json({
+          error: `Kopya na ang ${file.name} — nasa "${dup.title}" (${dup.date}). Hindi na ito inupload.`,
+          duplicate: dup
+        }, 409);
+      }
       let uploaded;
       try {
-        uploaded = await uploadOneToDrive(env, file);
+        uploaded = await uploadOneToDrive(env, file, fileBuf);
       } catch (err) {
         return json({ error: err.message }, 500);
       }
       const entry = driveEntries([file], [uploaded])[0];
+      entry.hash = hash;
       memories[idx].media = [...(memories[idx].media || []), entry];
       await env.KV.put('memories', JSON.stringify(memories));
       return json({ success: true, media: entry });
@@ -554,8 +657,21 @@ export default {
         if (fileError) return json({ error: fileError }, 400);
         let fileMedia = [];
         if (files.length) {
+          const hashes = [];
+          const seen = new Map();
+          for (const f of files) {
+            const h = await sha256Hex(await f.arrayBuffer());
+            const dup = findDuplicateHash(memories, h) ||
+              (seen.has(h) ? { memoryId: id, title: memories[idx].title, date, name: f.name } : null);
+            if (dup) {
+              return json({ error: `Kopya na ang ${f.name} — nasa "${dup.title}"${dup.date ? ` (${dup.date})` : ''}. Walang na-upload.` }, 409);
+            }
+            seen.set(h, f.name);
+            hashes.push(h);
+          }
           try {
             fileMedia = driveEntries(files, await uploadFilesToDrive(env, files));
+            fileMedia.forEach((e, i) => { e.hash = hashes[i]; });
           } catch (err) {
             return json({ error: err.message }, 500);
           }

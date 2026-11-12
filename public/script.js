@@ -878,6 +878,53 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // ---------- Duplicate detection ----------
+  async function fileSha256(file) {
+    const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+    return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  const mediaInput = document.getElementById('media');
+  const dupNotice = document.getElementById('dupNotice');
+  let dupSkipIdx = new Set();
+
+  mediaInput.addEventListener('change', async () => {
+    dupSkipIdx = new Set();
+    dupNotice.hidden = true;
+    const files = Array.from(mediaInput.files);
+    if (!files.length) return;
+    let index = [];
+    try {
+      const res = await fetch('/api/media-hashes');
+      if (!res.ok) return;
+      const data = await res.json().catch(() => null);
+      index = (data && data.hashes) || [];
+    } catch (e) {
+      return; // walang pre-check, pero hahulihin pa rin ng server ang mga kopya
+    }
+    const byHash = new Map(index.map(e => [e.h, e]));
+    const seen = new Map();
+    const lines = [];
+    for (let i = 0; i < files.length; i++) {
+      let h;
+      try { h = await fileSha256(files[i]); } catch (e) { continue; }
+      const existing = byHash.get(h);
+      if (existing) {
+        dupSkipIdx.add(i);
+        lines.push(files[i].name + ' — nasa na sa "' + existing.t + '" (' + formatDate(existing.d) + ')');
+      } else if (seen.has(h)) {
+        dupSkipIdx.add(i);
+        lines.push(files[i].name + ' — kopya ng ' + seen.get(h) + ' sa mga napili mo');
+      } else {
+        seen.set(h, files[i].name);
+      }
+    }
+    if (lines.length) {
+      dupNotice.textContent = lines.length + ' kopya ang hindi isasama sa upload:\n' + lines.join('\n');
+      dupNotice.hidden = false;
+    }
+  });
+
   memoryForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     statusMsg.style.color = '#70d6ff';
@@ -910,9 +957,14 @@ document.addEventListener('DOMContentLoaded', () => {
       // 2) Isa-isang file, kanya-kanyang request, may progress
       const memId = editingId || (result.memory && result.memory.id);
       const failed = [];
+      const skippedDup = [];
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
         statusMsg.textContent = `Nag-a-upload: ${i + 1}/${files.length} — ${f.name}`;
+        if (dupSkipIdx.has(i)) {
+          skippedDup.push(f.name);
+          continue;
+        }
         if (f.size > 36 * 1024 * 1024 || !['image/', 'video/', 'audio/'].some(t => (f.type || '').startsWith(t))) {
           failed.push(f.name);
           continue;
@@ -922,20 +974,35 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
           const up = await fetch(`/api/memories/${memId}/files`, { method: 'POST', body: fd });
           const upRes = await up.json().catch(() => null);
+          if (up.status === 409 && upRes && upRes.duplicate) {
+            skippedDup.push(`${f.name} (nasa "${upRes.duplicate.title}")`);
+            continue;
+          }
           if (!up.ok || !upRes) throw new Error((upRes && upRes.error) || 'Upload failed.');
         } catch (err) {
           failed.push(f.name);
         }
       }
+      dupSkipIdx = new Set();
 
       if (failed.length) {
         statusMsg.style.color = '#ffb347';
-        statusMsg.textContent = `Naka-save ang memory! Pero hindi na-upload: ${failed.join(', ')}. Puwede mong i-add ulit via Edit.`;
+        statusMsg.textContent = `Naka-save ang memory! Pero hindi na-upload: ${failed.join(', ')}.` +
+          (skippedDup.length ? ` (${skippedDup.length} kopya ang na-skip.)` : '') +
+          ' Puwede mong i-add ulit via Edit.';
         setTimeout(() => {
           hideModal(memoryModal);
           editingId = null;
           loadMemories();
         }, 5000);
+      } else if (skippedDup.length) {
+        statusMsg.style.color = '#38ef7d';
+        statusMsg.textContent = `Naka-save ang memory! ${skippedDup.length} kopya ang na-skip: ${skippedDup.join(', ')}.`;
+        setTimeout(() => {
+          hideModal(memoryModal);
+          editingId = null;
+          loadMemories();
+        }, 4000);
       } else {
         statusMsg.style.color = '#38ef7d';
         statusMsg.textContent = editingId ? 'Memory updated!' : 'Memory saved successfully!';

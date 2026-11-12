@@ -858,6 +858,19 @@ body {
   cursor: not-allowed;
 }
 
+.dup-notice {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #ffb347;
+  background: rgba(255, 179, 71, 0.08);
+  border: 1px solid rgba(255, 179, 71, 0.35);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  white-space: pre-line;
+  word-break: break-word;
+}
+
 .status-msg {
   margin-top: 10px;
   text-align: center;
