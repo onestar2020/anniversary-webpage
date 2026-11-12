@@ -887,43 +887,95 @@ document.addEventListener('DOMContentLoaded', () => {
   const mediaInput = document.getElementById('media');
   const dupNotice = document.getElementById('dupNotice');
   let dupSkipIdx = new Set();
+  let dupCheckPromise = Promise.resolve();
+  let uploadingNow = false;
+  let wakeLock = null;
 
-  mediaInput.addEventListener('change', async () => {
+  // Panatilihin ang screen na gising habang nag-u-upload — kapag nag-lock o
+  // naka-background ang phone, pinapatay ng OS ang page at napuputol ang upload.
+  async function keepAwake(on) {
+    try {
+      if (on) wakeLock = await navigator.wakeLock.request('screen');
+      else if (wakeLock) { await wakeLock.release(); wakeLock = null; }
+    } catch (e) { /* hindi supported — tuloy pa rin */ }
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && uploadingNow) keepAwake(true);
+  });
+
+  window.addEventListener('beforeunload', (e) => {
+    if (!uploadingNow) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+
+  mediaInput.addEventListener('change', () => {
     dupSkipIdx = new Set();
     dupNotice.hidden = true;
     const files = Array.from(mediaInput.files);
-    if (!files.length) return;
-    let index = [];
-    try {
-      const res = await fetch('/api/media-hashes');
-      if (!res.ok) return;
-      const data = await res.json().catch(() => null);
-      index = (data && data.hashes) || [];
-    } catch (e) {
-      return; // walang pre-check, pero hahulihin pa rin ng server ang mga kopya
-    }
-    const byHash = new Map(index.map(e => [e.h, e]));
-    const seen = new Map();
-    const lines = [];
-    for (let i = 0; i < files.length; i++) {
-      let h;
-      try { h = await fileSha256(files[i]); } catch (e) { continue; }
-      const existing = byHash.get(h);
-      if (existing) {
-        dupSkipIdx.add(i);
-        lines.push(files[i].name + ' — nasa na sa "' + existing.t + '" (' + formatDate(existing.d) + ')');
-      } else if (seen.has(h)) {
-        dupSkipIdx.add(i);
-        lines.push(files[i].name + ' — kopya ng ' + seen.get(h) + ' sa mga napili mo');
-      } else {
-        seen.set(h, files[i].name);
+    if (!files.length) { dupCheckPromise = Promise.resolve(); return; }
+    submitBtn.disabled = true;
+    statusMsg.style.color = '#70d6ff';
+    dupCheckPromise = (async () => {
+      let index = [];
+      try {
+        const res = await fetch('/api/media-hashes');
+        if (!res.ok) return; // walang pre-check, pero hahulihin pa rin ng server ang mga kopya
+        const data = await res.json().catch(() => null);
+        index = (data && data.hashes) || [];
+      } catch (e) {
+        return;
       }
-    }
-    if (lines.length) {
-      dupNotice.textContent = lines.length + ' kopya ang hindi isasama sa upload:\n' + lines.join('\n');
-      dupNotice.hidden = false;
-    }
+      const byHash = new Map(index.map(e => [e.h, e]));
+      const seen = new Map();
+      const lines = [];
+      for (let i = 0; i < files.length; i++) {
+        statusMsg.textContent = `Sinusuri ang mga file: ${i + 1}/${files.length}...`;
+        let h;
+        try { h = await fileSha256(files[i]); } catch (e) { continue; }
+        const existing = byHash.get(h);
+        if (existing) {
+          dupSkipIdx.add(i);
+          lines.push(files[i].name + ' — nasa na sa "' + existing.t + '" (' + formatDate(existing.d) + ')');
+        } else if (seen.has(h)) {
+          dupSkipIdx.add(i);
+          lines.push(files[i].name + ' — kopya ng ' + seen.get(h) + ' sa mga napili mo');
+        } else {
+          seen.set(h, files[i].name);
+        }
+      }
+      if (lines.length) {
+        dupNotice.textContent = lines.length + ' kopya ang hindi isasama sa upload:\n' + lines.join('\n');
+        dupNotice.hidden = false;
+      }
+    })().catch(() => {}).finally(() => {
+      submitBtn.disabled = false;
+      statusMsg.textContent = '';
+    });
   });
+
+  // Isang file, may isang retry para sa flaky mobile network.
+  // Hindi nilolog ang 409 (duplicate) at 401 (expired session) — permanenteng sagot.
+  async function uploadOneWithRetry(memId, file) {
+    let lastError = 'Upload failed.';
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const fd = new FormData();
+      fd.append('media', file);
+      try {
+        const up = await fetch(`/api/memories/${memId}/files`, { method: 'POST', body: fd });
+        const upRes = await up.json().catch(() => null);
+        if (up.status === 409 && upRes && upRes.duplicate) return { skip: upRes.duplicate };
+        if (up.ok && upRes) return { ok: true };
+        if (up.status === 401 || up.status === 400) return { error: (upRes && upRes.error) || lastError };
+        lastError = (upRes && upRes.error) || `Upload failed (HTTP ${up.status}).`;
+      } catch (err) {
+        lastError = err.message || lastError;
+      }
+      if (attempt === 0) await new Promise(r => setTimeout(r, 1500));
+    }
+    return { error: lastError };
+  }
 
   memoryForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -942,6 +994,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (editingId) formData.append('keepMedia', JSON.stringify(editKept.map(m => m.src)));
 
     try {
+      // Hintayin muna ang duplicate pre-check (nakadisable ang Save habang
+      // sinusuri, pero kung na-click na agad, dito nagkaka-ayos ang daloy).
+      await dupCheckPromise;
+
       // 1) Metadata + links muna — ang maraming file sa isang request ay
       //    lumalampas sa 100MB body limit ng Cloudflare (HTML error ang sagot).
       let url = '/api/memories';
@@ -954,7 +1010,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const result = await response.json().catch(() => null);
       if (!response.ok || !result) throw new Error((result && result.error) || 'Server error occurred.');
 
-      // 2) Isa-isang file, kanya-kanyang request, may progress
+      // 2) Isa-isang file, kanya-kanyang request, may progress at retry
+      uploadingNow = true;
+      keepAwake(true);
       const memId = editingId || (result.memory && result.memory.id);
       const failed = [];
       const skippedDup = [];
@@ -969,19 +1027,9 @@ document.addEventListener('DOMContentLoaded', () => {
           failed.push(f.name);
           continue;
         }
-        const fd = new FormData();
-        fd.append('media', f);
-        try {
-          const up = await fetch(`/api/memories/${memId}/files`, { method: 'POST', body: fd });
-          const upRes = await up.json().catch(() => null);
-          if (up.status === 409 && upRes && upRes.duplicate) {
-            skippedDup.push(`${f.name} (nasa "${upRes.duplicate.title}")`);
-            continue;
-          }
-          if (!up.ok || !upRes) throw new Error((upRes && upRes.error) || 'Upload failed.');
-        } catch (err) {
-          failed.push(f.name);
-        }
+        const up = await uploadOneWithRetry(memId, f);
+        if (up.skip) skippedDup.push(`${f.name} (nasa "${up.skip.title}")`);
+        else if (up.error) failed.push(f.name);
       }
       dupSkipIdx = new Set();
 
@@ -1016,6 +1064,8 @@ document.addEventListener('DOMContentLoaded', () => {
       statusMsg.style.color = '#ff4b72';
       statusMsg.textContent = err.message;
     } finally {
+      uploadingNow = false;
+      keepAwake(false);
       submitBtn.disabled = false;
     }
   });
