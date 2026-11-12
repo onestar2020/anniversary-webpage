@@ -1045,6 +1045,12 @@ body.intro-open {
   z-index: 1;
 }
 
+.envelope-intro.open .intro-heading {
+  animation: none;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
 .envelope {
   position: relative;
   width: min(84vw, 400px);
@@ -1086,7 +1092,13 @@ body.intro-open {
 }
 
 .envelope.open .letter-card {
-  transform: translateY(-46%);
+  transform: translateY(-16%) scale(1.5);
+  z-index: 6;
+}
+
+.envelope.open .letter-hint {
+  opacity: 0;
+  transition: opacity 0.4s ease 0.45s;
 }
 
 .letter-dear {
@@ -1184,6 +1196,19 @@ body.intro-open {
   color: #f0617f;
 }
 
+.intro-continue {
+  font-size: clamp(0.75rem, 2.4vw, 0.9rem);
+  color: #c48a9d;
+  letter-spacing: 1px;
+  opacity: 0;
+  transition: opacity 0.8s ease 1.3s;
+  z-index: 1;
+}
+
+.envelope-intro.open .intro-continue {
+  opacity: 1;
+}
+
 .intro-footer {
   font-family: 'Dancing Script', cursive;
   font-size: clamp(1rem, 3vw, 1.3rem);
@@ -1195,4 +1220,14 @@ body.intro-open {
 @keyframes introFadeUp {
   from { opacity: 0; transform: translateY(18px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 560px) {
+  .envelope-intro {
+    gap: 18px;
+  }
+
+  .envelope.open .letter-card {
+    transform: translateY(-14%) scale(1.28);
+  }
 }

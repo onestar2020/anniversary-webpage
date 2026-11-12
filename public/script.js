@@ -339,6 +339,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!intro || !box) return;
     document.body.classList.add('intro-open');
     let opened = false;
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      intro.classList.add('intro-done');
+      document.removeEventListener('keydown', onKey);
+      setTimeout(() => {
+        intro.remove();
+        document.body.classList.remove('intro-open');
+      }, 900);
+    };
     const reveal = () => {
       if (opened) return;
       opened = true;
@@ -359,18 +370,17 @@ document.addEventListener('DOMContentLoaded', () => {
         bgMusic.play().then(setMusicLabel).catch(() => {});
       }
       box.classList.add('open');
-      setTimeout(() => intro.classList.add('intro-done'), 2300);
-      setTimeout(() => {
-        intro.remove();
-        document.body.classList.remove('intro-open');
-      }, 3300);
+      intro.classList.add('open');
+      // Mananatiling nakabukas ang letter para mabasa — ikalawang tap kahit
+      // saan (o Enter/Space) ang magpapatuloy, o awtomatiko pagkatapos ng 9s.
+      setTimeout(() => document.addEventListener('click', finish, { once: true }), 450);
+      setTimeout(finish, 9000);
     };
     box.addEventListener('click', reveal);
     const onKey = (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        document.removeEventListener('keydown', onKey);
-        reveal();
-      }
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      if (!opened) reveal();
+      else finish();
     };
     document.addEventListener('keydown', onKey);
   })();
