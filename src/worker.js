@@ -409,6 +409,40 @@ export default {
       return json({ error: 'Method not allowed' }, 405);
     }
 
+    // Isa-isang file upload para sa isang memory — ang sabay-sabay na maraming
+    // file sa isang request lumalampas sa 100MB body limit ng Cloudflare at
+    // nagre-result ng HTML error page na hindi kayang i-parse ng frontend.
+    const fileMatch = path.match(/^\/api\/memories\/(\d+)\/files$/);
+    if (fileMatch) {
+      if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+      if (!(await isAdmin(request, env))) {
+        return json({ error: 'Kailangan mag-login bilang admin.' }, 401);
+      }
+      const id = Number(fileMatch[1]);
+      const memories = (await env.KV.get('memories', 'json')) || [];
+      const idx = memories.findIndex(m => m.id === id);
+      if (idx === -1) return json({ error: 'Hindi nahanap ang memory.' }, 404);
+      const form = await request.formData();
+      const file = form.get('media');
+      if (!file || typeof file === 'string') return json({ error: 'Walang file na naipadala.' }, 400);
+      if (file.size > MAX_FILE_MB * 1024 * 1024) {
+        return json({ error: `Masyadong malaki ang ${file.name}. Limit ay ${MAX_FILE_MB}MB.` }, 400);
+      }
+      if (!['image/', 'video/', 'audio/'].some(t => (file.type || '').startsWith(t))) {
+        return json({ error: 'Hindi suportadong file type. Images, videos, at music lang.' }, 400);
+      }
+      let uploaded;
+      try {
+        uploaded = await uploadOneToDrive(env, file);
+      } catch (err) {
+        return json({ error: err.message }, 500);
+      }
+      const entry = driveEntries([file], [uploaded])[0];
+      memories[idx].media = [...(memories[idx].media || []), entry];
+      await env.KV.put('memories', JSON.stringify(memories));
+      return json({ success: true, media: entry });
+    }
+
     const memMatch = path.match(/^\/api\/memories\/(\d+)$/);
     if (memMatch) {
       if (!(await isAdmin(request, env))) {

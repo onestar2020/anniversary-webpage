@@ -488,24 +488,37 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   saveSongBtn.addEventListener('click', async () => {
-    const files = songFile.files;
+    const files = Array.from(songFile.files);
     const links = songLinks.value.split('\n').map(s => s.trim()).filter(Boolean);
     if (!files.length && !links.length) {
       songStatusMsg.style.color = '#ff4b72';
       songStatusMsg.textContent = 'Pumili ng file o mag-paste ng Drive link.';
       return;
     }
-    songStatusMsg.style.color = '#70d6ff';
-    songStatusMsg.textContent = files.length ? 'Ina-upload ang mga kanta sa Drive...' : 'Sine-save ang mga Drive link...';
     saveSongBtn.disabled = true;
-    const fd = new FormData();
-    for (const f of files) fd.append('song', f);
-    if (links.length) fd.append('links', songLinks.value);
     try {
-      const res = await fetch('/api/bg-music', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Server error occurred.');
-      playlist = data.songs || [];
+      // Isa-isang file kada request — ang sabay-sabay na maraming kanta ay
+      // lumalampas sa request size limit ng Cloudflare.
+      for (let i = 0; i < files.length; i++) {
+        songStatusMsg.style.color = '#70d6ff';
+        songStatusMsg.textContent = `Ina-upload: ${i + 1}/${files.length} — ${files[i].name}`;
+        const fd = new FormData();
+        fd.append('song', files[i]);
+        const res = await fetch('/api/bg-music', { method: 'POST', body: fd });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data) throw new Error((data && data.error) || `Hindi na-upload ang ${files[i].name}.`);
+        playlist = data.songs || [];
+      }
+      if (links.length) {
+        songStatusMsg.style.color = '#70d6ff';
+        songStatusMsg.textContent = 'Sine-save ang mga Drive link...';
+        const fd = new FormData();
+        fd.append('links', songLinks.value);
+        const res = await fetch('/api/bg-music', { method: 'POST', body: fd });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data) throw new Error((data && data.error) || 'Server error occurred.');
+        playlist = data.songs || [];
+      }
       songIndex = 0;
       userWantsMusic = true;
       pausedForMedia = false;
@@ -768,36 +781,67 @@ document.addEventListener('DOMContentLoaded', () => {
     statusMsg.textContent = editingId ? 'Updating memory...' : 'Saving memory...';
     submitBtn.disabled = true;
 
+    const filesInput = document.getElementById('media');
+    const files = Array.from(filesInput.files);
+
     const formData = new FormData();
     formData.append('date', document.getElementById('date').value);
     formData.append('title', document.getElementById('title').value);
     formData.append('text', document.getElementById('text').value);
     formData.append('links', document.getElementById('links').value);
-
-    const filesInput = document.getElementById('media');
-    for (const f of filesInput.files) formData.append('media', f);
-
-    let url = '/api/memories';
-    let method = 'POST';
-    if (editingId) {
-      url = `/api/memories/${editingId}`;
-      method = 'PUT';
-      formData.append('keepMedia', JSON.stringify(editKept.map(m => m.src)));
-    }
+    if (editingId) formData.append('keepMedia', JSON.stringify(editKept.map(m => m.src)));
 
     try {
+      // 1) Metadata + links muna — ang maraming file sa isang request ay
+      //    lumalampas sa 100MB body limit ng Cloudflare (HTML error ang sagot).
+      let url = '/api/memories';
+      let method = 'POST';
+      if (editingId) {
+        url = `/api/memories/${editingId}`;
+        method = 'PUT';
+      }
       const response = await fetch(url, { method, body: formData });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Server error occurred.');
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result) throw new Error((result && result.error) || 'Server error occurred.');
 
-      statusMsg.style.color = '#38ef7d';
-      statusMsg.textContent = editingId ? 'Memory updated!' : 'Memory saved successfully!';
+      // 2) Isa-isang file, kanya-kanyang request, may progress
+      const memId = editingId || (result.memory && result.memory.id);
+      const failed = [];
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        statusMsg.textContent = `Nag-a-upload: ${i + 1}/${files.length} — ${f.name}`;
+        if (f.size > 36 * 1024 * 1024 || !['image/', 'video/', 'audio/'].some(t => (f.type || '').startsWith(t))) {
+          failed.push(f.name);
+          continue;
+        }
+        const fd = new FormData();
+        fd.append('media', f);
+        try {
+          const up = await fetch(`/api/memories/${memId}/files`, { method: 'POST', body: fd });
+          const upRes = await up.json().catch(() => null);
+          if (!up.ok || !upRes) throw new Error((upRes && upRes.error) || 'Upload failed.');
+        } catch (err) {
+          failed.push(f.name);
+        }
+      }
 
-      setTimeout(() => {
-        hideModal(memoryModal);
-        editingId = null;
-        loadMemories();
-      }, 800);
+      if (failed.length) {
+        statusMsg.style.color = '#ffb347';
+        statusMsg.textContent = `Naka-save ang memory! Pero hindi na-upload: ${failed.join(', ')}. Puwede mong i-add ulit via Edit.`;
+        setTimeout(() => {
+          hideModal(memoryModal);
+          editingId = null;
+          loadMemories();
+        }, 5000);
+      } else {
+        statusMsg.style.color = '#38ef7d';
+        statusMsg.textContent = editingId ? 'Memory updated!' : 'Memory saved successfully!';
+        setTimeout(() => {
+          hideModal(memoryModal);
+          editingId = null;
+          loadMemories();
+        }, 800);
+      }
     } catch (err) {
       statusMsg.style.color = '#ff4b72';
       statusMsg.textContent = err.message;
