@@ -177,7 +177,11 @@ document.addEventListener('DOMContentLoaded', () => {
     try { localStorage.setItem('annivMusicVolume', String(musicVolume)); } catch (e) {}
   }
 
-  (function initWebAudio() {
+  // Nililikha lang ang AudioContext SA UNANG TAP (user gesture): sa iOS, ang
+  // context na ginawa bago may interaction ay nai-stuck sa suspended kahit
+  // mag-resume pa — kaya tahimik ang tugtog kahit naka-unmute na.
+  function ensureWebAudio() {
+    if (gainNode) { wakeAudioCtx(); return; }
     try {
       const Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) return;
@@ -193,17 +197,18 @@ document.addEventListener('DOMContentLoaded', () => {
       gainNode = null;
       bgMusic.volume = musicVolume;
     }
-  })();
+  }
 
   applyVolume();
 
   volumeSlider.addEventListener('input', () => {
     musicVolume = Number(volumeSlider.value) / 100;
     applyVolume();
-    wakeAudioCtx();
+    ensureWebAudio();
   });
 
   function setMusicLabel() {
+    musicBtn.classList.toggle('waiting', !bgMusic.paused && autoMuted);
     musicText.textContent = !bgMusic.paused && autoMuted
       ? 'Tap para may tunog'
       : (bgMusic.paused ? 'Play Our Song' : 'Pause Music');
@@ -244,7 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   musicBtn.addEventListener('click', () => {
-    wakeAudioCtx();
+    ensureWebAudio();
     if (autoMuted) {
       autoMuted = false;
       bgMusic.muted = false;
@@ -267,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
     songIndex = (songIndex + step + playlist.length) % playlist.length;
     userWantsMusic = true;
     pausedForMedia = false;
-    wakeAudioCtx();
+    ensureWebAudio();
     startSong();
   }
   prevSongBtn.addEventListener('click', () => switchSong(-1));
@@ -281,7 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.removeEventListener('keydown', startMusic);
       // Ang musicBtn click mismo ang mag-unmute (tingnan ang musicBtn handler)
       if (ev && ev.target && ev.target.closest && ev.target.closest('#musicBtn')) return;
-      wakeAudioCtx();
+      ensureWebAudio();
       if (autoMuted) {
         autoMuted = false;
         bgMusic.muted = false;
